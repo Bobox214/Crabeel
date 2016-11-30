@@ -22,7 +22,7 @@ double kD = 0.2;
 double target = 0;
 bool   start  = false;
 bool   fast   = false;
-
+bool   initialized = false;
 unsigned long time;
 unsigned long lastTime;
 int     armAngle;
@@ -33,7 +33,7 @@ void setup() {
 	Serial.begin(115200);
 	Serial3.begin(115200);
 	gyro.begin();
-	pid.setDebug(true);
+	pid.setDebug(false);
 	pid.setCoefficients(kP,kI,kD);
 	pid.setOutputRange(-255,255,20);
 	arm.setup();
@@ -87,7 +87,11 @@ void processCmd() {
 			pid.setCoefficients(kP,kI,kD);
 	}
 }
-
+void initialize() {
+	Serial3.println("*** Initilization ***");
+	arm.initialize();
+	Serial3.println("*** Initilization done ***");
+}
 void bluetoothLoop() {
 	if (Serial3.available()) {
 		int v = Serial3.read();
@@ -110,10 +114,15 @@ void bluetoothLoop() {
 				fast = not fast;
 				Serial3.println(fast?"Fast update":"Std update");
 			} else if (v=='s') {
-				start = not start;
-				Serial3.println(start?"*** Start ***":"*** Stop ***");
-				if (not start)
-					reset();
+				if (not initialized) {
+					initialize();
+					initialized = true;
+				} else {
+					start = not start;
+					Serial3.println(start?"*** Start ***":"*** Stop ***");
+					if (not start)
+						reset();
+				}
 			}
 		} else {
 			if (v == ';') {

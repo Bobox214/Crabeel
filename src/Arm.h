@@ -2,7 +2,7 @@
 
 MeEncoderOnBoard Encoder_Arm(SLOT3);
 
-#define CRABEEL_ARM_GEAR_RATIO 9
+#define CRABEEL_ARM_GEAR_RATIO 7
 class CrabeelArm {
 	public:
 		CrabeelArm()
@@ -48,6 +48,42 @@ class CrabeelArm {
 				Serial3.println(pwm);
 			}
 		}
+		void initialize() {
+			double minAngle,maxAngle;
+			Encoder_Arm.setMotorPwm(80);
+			Encoder_Arm.loop();
+			delay(100);
+			while (true) {
+				delay(20);
+				Encoder_Arm.loop();
+				if (abs(Encoder_Arm.getCurrentSpeed())<3)
+					break;
+			}
+			maxAngle = getAngle();
+			Encoder_Arm.setMotorPwm(-80);
+			Encoder_Arm.loop();
+			delay(100);
+			while (true) {
+				delay(20);
+				Encoder_Arm.loop();
+				if (abs(Encoder_Arm.getCurrentSpeed())<3)
+					break;
+			}
+			minAngle = getAngle();
+			Encoder_Arm.setMotorPwm(0);
+			Serial3.print("Found min :");
+			Serial3.print(minAngle);
+			Serial3.print(" max :");
+			Serial3.println(maxAngle);
+
+			goToAngle((maxAngle+minAngle)/2);
+			while (activeGoToAngle) {
+				loop();
+				delay(10);
+			}
+			reset();
+		}
+
 		void reset() {
 			activeGoToAngle = false;
 			Encoder_Arm.setPulsePos(0);
@@ -62,6 +98,7 @@ class CrabeelArm {
 			Encoder_Arm.setSpeedPid(0.18,0,0);
 		}
 		void loop() {
+			Encoder_Arm.loop();
 			if (activeGoToAngle) {
 				int error = targetPos-Encoder_Arm.getPulsePos();
 				if (abs(error)>=2) {
