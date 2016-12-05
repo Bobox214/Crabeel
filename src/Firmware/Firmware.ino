@@ -15,11 +15,11 @@ int rMotorPwm;
 
 double  angleX,goalAngleX;
 double  angleZ,goalAngleZ;
+double  armMultiplier;
 
-double kP = 30;
+double kP = 35;
 double kI = 5;
-double kD = 0.2;
-double target = 0;
+double kD = 0.4;
 bool   start  = false;
 bool   fast   = false;
 bool   initialized = false;
@@ -33,9 +33,11 @@ void setup() {
 	Serial.begin(115200);
 	Serial3.begin(115200);
 	gyro.begin();
-	pid.setDebug(false);
+	pid.setDebug(true);
 	pid.setCoefficients(kP,kI,kD);
-	pid.setOutputRange(-255,255,20);
+	pid.setOutputRange(-255,255,0);
+	goalAngleX = 0;
+	armMultiplier = 0;
 	arm.setup();
 	arm.setDebug(false);
 	reset();
@@ -50,13 +52,15 @@ void printState() {
 	Serial3.print(" D:");
 	Serial3.print(kD);
 	Serial3.print(" Target:");
-	Serial3.print(target);
+	Serial3.print(goalAngleX);
 	Serial3.print(" AngleX:");
 	Serial3.print(gyro.getAngleX());
 	Serial3.print(" gyroX:");
 	Serial3.print(gyro.getGyroX());
 	Serial3.print(" AngleZ:");
 	Serial3.print(gyro.getAngleZ());
+	Serial3.print(" Arm multiplier:");
+	Serial3.print(armMultiplier);
 	Serial3.print(" Arm.Angle:");
 	Serial3.println(arm.getAngle());
 }
@@ -82,7 +86,7 @@ void processCmd() {
 		else if (cmd==2)
 			kD = value/10.0;
 		else if (cmd==3)
-			target = value/10.0;
+			armMultiplier = value/10.0;
 		if (cmd>=0 or cmd<=2)
 			pid.setCoefficients(kP,kI,kD);
 	}
@@ -108,7 +112,7 @@ void bluetoothLoop() {
 				cmd = 1;
 			else if (v=='d')
 				cmd = 2;
-			else if (v=='t')
+			else if (v=='m')
 				cmd = 3;
 			else if (v=='f') {
 				fast = not fast;
@@ -123,7 +127,15 @@ void bluetoothLoop() {
 					if (not start)
 						reset();
 				}
-			}
+			} else if (v=='j') {
+				Serial3.println("*** Initialization skipped ***");
+				initialized = true;
+			} else if (v=='k') {
+				Serial3.println("*** Force Initialization ***");
+				initialize();
+				initialized = true;
+			} else if (v=='t')
+				goalAngleX = gyro.getAngleX();
 		} else {
 			if (v == ';') {
 				processCmd();
@@ -142,11 +154,10 @@ void bluetoothLoop() {
 void reset() {
 	lMotorPwm  = 0;
 	rMotorPwm  = 0;
-	goalAngleX = 0;
 	goalAngleZ = gyro.getAngleZ();
 	pid.reset();
 	armMotorPwm = 0;
-	arm.reset();
+	arm.stop();
 	Serial3.println("*** Reset ***");
 	armAngle = arm.getAngle();
 }
@@ -171,9 +182,11 @@ void loop()
 			// Too much tilted. Stop
 			start = false;
 			reset();
+			arm.goToAngle(0);
 			Serial3.println("*** Stop ***");
 		} else {
 			pwm = pid.update(angleX-goalAngleX,dt);
+			arm.goToAngle(constrain(-armMultiplier*(angleX-goalAngleX),-45,45));
 			zPwm = 0;
 			//zPwm = (angleZ-goalAngleZ)*10;
 			//zPwm = constrain(zPwm,-50,50);

@@ -23,20 +23,22 @@ class CrabeelArm {
 			targetPos = CRABEEL_ARM_GEAR_RATIO*(angle+360*(curPos/(CRABEEL_ARM_GEAR_RATIO*360)));
 			if (curPos-targetPos>180*CRABEEL_ARM_GEAR_RATIO) targetPos=targetPos+360*CRABEEL_ARM_GEAR_RATIO;
 			if (targetPos-curPos>180*CRABEEL_ARM_GEAR_RATIO) targetPos=targetPos-360*CRABEEL_ARM_GEAR_RATIO;
-			if (debug) {
-				Serial3.print("Crabeel Arm : Start goToAngle ");
-				Serial3.print(angle);
-				Serial3.print(" ArmAngle ");
-				Serial3.print((curPos/CRABEEL_ARM_GEAR_RATIO)%360);
-				Serial3.print(" CurPos ");
-				Serial3.println(curPos);
-				Serial3.print(" TargetPos ");
-				Serial3.print(targetPos);
+			if (not activeGoToAngle) {
+				if (debug) {
+					Serial3.print("Crabeel Arm : Start goToAngle ");
+					Serial3.print(angle);
+					Serial3.print(" ArmAngle ");
+					Serial3.print((curPos/CRABEEL_ARM_GEAR_RATIO)%360);
+					Serial3.print(" CurPos ");
+					Serial3.println(curPos);
+					Serial3.print(" TargetPos ");
+					Serial3.print(targetPos);
+				}
+				anglePID.reset();
+				anglePID.setOutputRange(-pwmMax,pwmMax,0);
+				Encoder_Arm.setMotionMode(DIRECT_MODE);
+				activeGoToAngle = true;
 			}
-			anglePID.reset();
-			anglePID.setOutputRange(-pwmMax,pwmMax,0);
-			Encoder_Arm.setMotionMode(DIRECT_MODE);
-			activeGoToAngle = true;
 		}
 		void setMotorPwm(int pwm) {
 			if (activeGoToAngle)
@@ -85,8 +87,11 @@ class CrabeelArm {
 		}
 
 		void reset() {
-			activeGoToAngle = false;
+			stop();
 			Encoder_Arm.setPulsePos(0);
+		}
+		void stop() {
+			activeGoToAngle = false;
 			Encoder_Arm.setMotionMode(DIRECT_MODE);
 			Encoder_Arm.setMotorPwm(0);
 		}
