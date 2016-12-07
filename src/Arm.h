@@ -1,5 +1,7 @@
 #include "PID.h"
 
+typedef void (*endCb_t)(int16_t); 
+
 MeEncoderOnBoard Encoder_Arm(SLOT3);
 
 #define CRABEEL_ARM_GEAR_RATIO 7
@@ -18,8 +20,9 @@ class CrabeelArm {
 		int getAngle() {
 			return (Encoder_Arm.getPulsePos()/CRABEEL_ARM_GEAR_RATIO)%360;
 		}
-		void goToAngle(int angle,int pwmMax=255) {
+		void goToAngle(int angle,int pwmMax=255, endCb_t callback=NULL) {
 			int curPos = Encoder_Arm.getPulsePos();
+			_callback = callback;
 			targetPos = CRABEEL_ARM_GEAR_RATIO*(angle+360*(curPos/(CRABEEL_ARM_GEAR_RATIO*360)));
 			if (curPos-targetPos>180*CRABEEL_ARM_GEAR_RATIO) targetPos=targetPos+360*CRABEEL_ARM_GEAR_RATIO;
 			if (targetPos-curPos>180*CRABEEL_ARM_GEAR_RATIO) targetPos=targetPos-360*CRABEEL_ARM_GEAR_RATIO;
@@ -40,6 +43,12 @@ class CrabeelArm {
 				activeGoToAngle = true;
 			}
 		}
+		void goToMaxAngle(int pwmMax=255, endCb_t callback=NULL) {
+			goToAngle(maxAngle,pwmMax,callback);
+		}
+		void goToMinAngle(int pwmMax=255, endCb_t callback=NULL) {
+			goToAngle(minAngle,pwmMax,callback);
+		}
 		void setMotorPwm(int pwm) {
 			if (activeGoToAngle)
 				Serial3.println("*** Error *** : CrabeelArm : Cannot setMotorPwm when goToAngle is still active");
@@ -51,7 +60,7 @@ class CrabeelArm {
 			}
 		}
 		void initialize() {
-			double minAngle,maxAngle;
+			double targetAngle;
 			Encoder_Arm.setMotorPwm(80);
 			Encoder_Arm.loop();
 			delay(100);
@@ -73,17 +82,22 @@ class CrabeelArm {
 			}
 			minAngle = getAngle();
 			Encoder_Arm.setMotorPwm(0);
-			Serial3.print("Found min :");
-			Serial3.print(minAngle);
-			Serial3.print(" max :");
-			Serial3.println(maxAngle);
+			if (debug) {
+				Serial3.print("Found min :");
+				Serial3.print(minAngle);
+				Serial3.print(" max :");
+				Serial3.println(maxAngle);
+			}
 
-			goToAngle((maxAngle+minAngle)/2);
+			targetAngle = (maxAngle+minAngle)/2;
+			goToAngle(targetAngle);
 			while (activeGoToAngle) {
 				loop();
 				delay(10);
 			}
 			reset();
+			maxAngle -= targetAngle; 
+			minAngle -= targetAngle; 
 		}
 
 		void reset() {
@@ -91,6 +105,9 @@ class CrabeelArm {
 			Encoder_Arm.setPulsePos(0);
 		}
 		void stop() {
+			if (activeGoToAngle) {
+				if (_callback != NULL) _callback(1);
+			}
 			activeGoToAngle = false;
 			Encoder_Arm.setMotionMode(DIRECT_MODE);
 			Encoder_Arm.setMotorPwm(0);
@@ -110,6 +127,7 @@ class CrabeelArm {
 					Encoder_Arm.setMotorPwm( anglePID.update(error) );
 				} else {
 					activeGoToAngle = false;
+					if (_callback != NULL) _callback(0);
 					Encoder_Arm.setMotorPwm(0);
 					if (debug)
 						Serial3.println("CrabeelArm : End goToAngle ");
@@ -126,11 +144,13 @@ class CrabeelArm {
 		}
 
 	private:
+		endCb_t _callback;
 		bool debug;
 		PID anglePID;
 		int targetPos;
 		unsigned long timeStartMotorPwm;
 		bool activeGoToAngle = false;
+		double minAngle,maxAngle;
 
 		static void processEncoderInt(void) {
 			if(digitalRead(Encoder_Arm.getPortB()) == 0)

@@ -20,24 +20,29 @@ double  armMultiplier;
 double kP = 35;
 double kI = 5;
 double kD = 0.4;
-bool   start  = false;
 bool   fast   = false;
 bool   initialized = false;
 unsigned long time;
 unsigned long lastTime;
+unsigned long lastPrintStateTime;
 int     armAngle;
 double   dt;
 MeGyro gyro;
+
+enum eState                {  IDLE  ,  INITIALIZED  ,  STRAIGHT_UP  ,  BALANCE  ,  RESET  };
+const char * eStateStr[] = { "IDLE" , "INITIALIZED" , "STRAIGHT_UP" , "BALANCE" , "RESET" };
+eState state;
+void stateMoveToBalance(int16_t exitCode) { state = (exitCode==0 ? BALANCE : RESET ); }
 
 void setup() {
 	Serial.begin(115200);
 	Serial3.begin(115200);
 	gyro.begin();
-	pid.setDebug(true);
+	pid.setDebug(false);
 	pid.setCoefficients(kP,kI,kD);
 	pid.setOutputRange(-255,255,0);
 	goalAngleX = 0;
-	armMultiplier = 0;
+	armMultiplier = 30;
 	arm.setup();
 	arm.setDebug(false);
 	reset();
@@ -45,7 +50,9 @@ void setup() {
 }
 
 void printState() {
-	Serial3.print("PID P:");
+	Serial3.print("STATE :");
+	Serial3.print(eStateStr[state]);
+	Serial3.print(" PID P:");
 	Serial3.print(kP);
 	Serial3.print(" I:");
 	Serial3.print(kI);
@@ -63,6 +70,7 @@ void printState() {
 	Serial3.print(armMultiplier);
 	Serial3.print(" Arm.Angle:");
 	Serial3.println(arm.getAngle());
+	lastPrintStateTime = millis();
 }
 
 int cmd = -1;
@@ -118,14 +126,17 @@ void bluetoothLoop() {
 				fast = not fast;
 				Serial3.println(fast?"Fast update":"Std update");
 			} else if (v=='s') {
-				if (not initialized) {
-					initialize();
+				if (state == IDLE) {
+					if (not initialized) 
+						initialize();
 					initialized = true;
+					state = STRAIGHT_UP;
+					if (gyro.getAngleX()<0)
+						arm.goToMaxAngle(100,stateMoveToBalance);
+					else
+						arm.goToMinAngle(100,stateMoveToBalance);
 				} else {
-					start = not start;
-					Serial3.println(start?"*** Start ***":"*** Stop ***");
-					if (not start)
-						reset();
+					reset();
 				}
 			} else if (v=='j') {
 				Serial3.println("*** Initialization skipped ***");
@@ -160,7 +171,9 @@ void reset() {
 	arm.stop();
 	Serial3.println("*** Reset ***");
 	armAngle = arm.getAngle();
+	state = IDLE;
 }
+
 
 void loop()
 {
@@ -177,23 +190,30 @@ void loop()
 	time = millis();
 	dt = 1;//(time-lastTime)/1000.0;
 	
-	if (start) {
-		if (abs(angleX)>10) {
-			// Too much tilted. Stop
-			start = false;
-			reset();
-			arm.goToAngle(0);
-			Serial3.println("*** Stop ***");
-		} else {
-			pwm = pid.update(angleX-goalAngleX,dt);
-			arm.goToAngle(constrain(-armMultiplier*(angleX-goalAngleX),-45,45));
-			zPwm = 0;
-			//zPwm = (angleZ-goalAngleZ)*10;
-			//zPwm = constrain(zPwm,-50,50);
-			lMotorPwm = pwm-zPwm;
-			rMotorPwm = pwm+zPwm;
+	switch (state) {
+		case IDLE        : break;
+		case STRAIGHT_UP : break;
+		case BALANCE : {
+			if (abs(angleX)>15) {
+				// Too much tilted. Stop
+				reset();
+				arm.goToAngle(0);
+				Serial3.println("*** Stop ***");
+			} else {
+				pwm = pid.update(angleX-goalAngleX,dt);
+				arm.goToAngle(constrain(-armMultiplier*(angleX-goalAngleX),-45,45));
+				zPwm = 0;
+				//zPwm = (angleZ-goalAngleZ)*10;
+				//zPwm = constrain(zPwm,-50,50);
+				lMotorPwm = pwm-zPwm;
+				rMotorPwm = pwm+zPwm;
+			}
+			break;
 		}
+		case RESET: { reset(); break; }
 	}
+	if (time-lastPrintStateTime>1000)
+		printState();
 		
 	rMotorPwm = constrain(rMotorPwm,-255,255);
 	lMotorPwm = constrain(lMotorPwm,-255,255);
