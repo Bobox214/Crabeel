@@ -38,11 +38,11 @@ void setup() {
 	Serial.begin(115200);
 	Serial3.begin(115200);
 	gyro.begin();
-	pid.setDebug(false);
+	pid.setDebug(true);
 	pid.setCoefficients(kP,kI,kD);
-	pid.setOutputRange(-255,255,0);
+	pid.setOutputRange(-255,255,20);
 	goalAngleX = 0;
-	armMultiplier = 30;
+	armMultiplier = 0;
 	arm.setup();
 	arm.setDebug(false);
 	reset();
@@ -130,11 +130,12 @@ void bluetoothLoop() {
 					if (not initialized) 
 						initialize();
 					initialized = true;
-					state = STRAIGHT_UP;
-					if (gyro.getAngleX()<0)
-						arm.goToMaxAngle(100,stateMoveToBalance);
-					else
-						arm.goToMinAngle(100,stateMoveToBalance);
+					stateMoveToBalance(0);
+					//state = STRAIGHT_UP;
+					//if (gyro.getAngleX()<0)
+					//	arm.goToMaxAngle(100,stateMoveToBalance);
+					//else
+					//	arm.goToMinAngle(100,stateMoveToBalance);
 				} else {
 					reset();
 				}
@@ -179,17 +180,14 @@ void loop()
 {
 	bluetoothLoop();
 	arm.loop();
-	if (fast)
-		gyro.fast_update();
-	else
-		gyro.update();
+	gyro.fast_update();
 	angleX = gyro.getAngleX();
 	angleZ = gyro.getAngleZ();
 
 	lastTime = time;
 	time = millis();
 	dt = 1;//(time-lastTime)/1000.0;
-	
+
 	switch (state) {
 		case IDLE        : break;
 		case STRAIGHT_UP : break;
@@ -201,7 +199,7 @@ void loop()
 				Serial3.println("*** Stop ***");
 			} else {
 				pwm = pid.update(angleX-goalAngleX,dt);
-				arm.goToAngle(constrain(-armMultiplier*(angleX-goalAngleX),-45,45));
+				arm.goToAngle(constrain(-armMultiplier*(angleX-goalAngleX),-40,40));
 				zPwm = 0;
 				//zPwm = (angleZ-goalAngleZ)*10;
 				//zPwm = constrain(zPwm,-50,50);
