@@ -17,10 +17,7 @@ Adafruit_BNO055 bno = Adafruit_BNO055(55);
 imu::Vector<3> euler;
 imu::Vector<3> rotation;
 
-BaseLocalizer base = BaseLocalizer();
-
-MeEncoderOnBoard EncoderL(SLOT1);
-MeEncoderOnBoard EncoderR(SLOT2);
+BaseLocalizer base = BaseLocalizer(SLOT1,SLOT2);
 
 PID  pid;
 int pwm,zPwm;
@@ -83,23 +80,8 @@ void setup() {
 	bno.setExtCrystalUse(true);
 	waitBnoCalibration();
 	base.setParameters(BASE_WIDTH,WHEEL_RADIUS,360);
-	base.setDebug(false);
-	attachInterrupt(EncoderL.getIntNum() , processEncoderLInt , RISING);
-	attachInterrupt(EncoderR.getIntNum() , processEncoderRInt , RISING);
+	base.setDebug(true);
 }
-void processEncoderLInt(void) {
-	if(digitalRead(EncoderL.getPortB()) == 0)
-		EncoderL.pulsePosMinus();
-	else
-		EncoderL.pulsePosPlus();;
-}
-void processEncoderRInt(void) {
-	if(digitalRead(EncoderR.getPortB()) == 0)
-		EncoderR.pulsePosMinus();
-	else
-		EncoderR.pulsePosPlus();;
-}
-
 void printState() {
 	Serial3.print("STATE :");
 	Serial3.print(eStateStr[state]);
@@ -206,7 +188,7 @@ void loop()
 	rotation = bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE);
 	pitch = euler.z();
 	velPitch  = rotation.z()*RAD_TO_DEGREE;
-	base.update(-EncoderL.getPulsePos(),EncoderR.getPulsePos(),euler.x()*DEGREE_TO_RAD);
+	base.updatePosition(euler.x()*DEGREE_TO_RAD);
 
 
 	lastTime = time;
@@ -273,8 +255,9 @@ void loop()
 				Serial3.print(" errYaw:");
 				Serial3.print(errYaw);
 				if (errYaw*errYaw<0.05) {
-					state = IDLE;
+					reset();
 					Serial3.println(" -> IDLE");
+					state = IDLE;
 				} else {
 					double w = constrain(w_kP*errYaw,-wMax,wMax);
 					// Convert v,w to motorPwm
@@ -291,12 +274,8 @@ void loop()
 		}
 		if (time-lastPrintStateTime>1000)
 			printState();
-			
-		rMotorPwm = constrain(rMotorPwm,-255,255);
-		lMotorPwm = constrain(lMotorPwm,-255,255);
 
-		EncoderL.setMotorPwm(-lMotorPwm);
-		EncoderR.setMotorPwm(rMotorPwm);
+		base.setMotorPwm(lMotorPwm,rMotorPwm);
 
 		delay(10);
 }

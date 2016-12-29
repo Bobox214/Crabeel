@@ -1,13 +1,35 @@
+#include "MeMegaPi.h"
+
 #define PI 3.141592
+
+MeEncoderOnBoard *EncoderL;
+MeEncoderOnBoard *EncoderR;
+
+void processEncoderLInt(void) {
+	if(digitalRead(EncoderL->getPortB()) == 0)
+		EncoderL->pulsePosMinus();
+	else
+		EncoderL->pulsePosPlus();;
+}
+void processEncoderRInt(void) {
+	if(digitalRead(EncoderR->getPortB()) == 0)
+		EncoderR->pulsePosMinus();
+	else
+		EncoderR->pulsePosPlus();;
+}
 
 class BaseLocalizer {
 	public:
-		BaseLocalizer()
+		BaseLocalizer(uint8_t slotL,uint8_t slotR)
 			:	debug(false)
 			,	_x(0)
 			,	_y(0)
 			,	_yaw(0)
-		{}
+		{	EncoderL = new MeEncoderOnBoard(slotL);
+			EncoderR = new MeEncoderOnBoard(slotR);
+			attachInterrupt(EncoderL->getIntNum() , processEncoderLInt , RISING);
+			attachInterrupt(EncoderR->getIntNum() , processEncoderRInt , RISING);
+		}
 		void setParameters(double baseWidth, double wheelRadius, int ticksPerRotation) {
 			this->baseWidth        = baseWidth;
 			this->wheelRadius      = wheelRadius;
@@ -21,7 +43,9 @@ class BaseLocalizer {
 		void setDebug(bool debug) {
 			this->debug = debug;
 		}
-		void update(int newTicksL, int newTicksR, double yaw) {
+		void updatePosition(double yaw) {
+			int newTicksL = -EncoderL->getPulsePos();
+			int newTicksR =  EncoderR->getPulsePos();
 			double dl = (2*PI*wheelRadius*(newTicksL-ticksL))/ticksPerRotation;
 			double dr = (2*PI*wheelRadius*(newTicksR-ticksR))/ticksPerRotation;
 			double df = (dr+dl)/2;
@@ -49,6 +73,12 @@ class BaseLocalizer {
 			ticksL = newTicksL;
 			ticksR = newTicksR;
 		}
+		void setMotorPwm(int pwmL,int pwmR) {
+			pwmL = constrain(pwmL,-255,255);
+			pwmR = constrain(pwmR,-255,255);
+			EncoderL->setMotorPwm(-pwmL);
+			EncoderR->setMotorPwm( pwmR);
+		}
 		double x()   { return this->_x;   }
 		double y()   { return this->_y;   }
 		double yaw() { return this->_yaw; }
@@ -60,3 +90,5 @@ class BaseLocalizer {
 		bool   debug;
 
 };
+
+
