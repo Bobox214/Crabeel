@@ -16,13 +16,12 @@
 
 Adafruit_BNO055 bno = Adafruit_BNO055(55);
 imu::Vector<3> euler;
-imu::Vector<3> rotation;
 
 Base base = Base(SLOT2,SLOT1);
 
 PID  pid;
 
-double  pitch,velPitch;
+double  pitch;
 double  goalYaw;
 double  goalX,goalY;
 
@@ -33,35 +32,20 @@ double w_kP = 4;
 double kP = 16;
 double kI = 0;
 double kD = 0.3;
+uint8_t neutralZone = 0;
 double stablePitch = 0;
 unsigned long autoStart_moveTime = 250;
-int autoStartPwm = 200;
+int autoStartPwm = 255;
 
 unsigned long autoStart_timeOut  = 1000;
 
 unsigned long curTime;
 unsigned long lastTime;
-unsigned long autoStartTime;
-double   dt;
+unsigned long stateEnterTime; // Time in millis when current state was entered
 
-enum eState                {  IDLE  ,  INITIALIZED  ,  AUTO_START  ,  BALANCE  ,  GO_TO_START  ,  TURN_TO_START  };
-const char * eStateStr[] = { "IDLE" , "INITIALIZED" , "AUTO_START" , "BALANCE" , "GO_TO_START" , "TURN_TO_START" };
+enum eState                {  IDLE  ,  CALIBRATION  ,  AUTO_START  ,  BALANCE  ,  GO_TO_START  ,  TURN_TO_START  };
+const char * eStateStr[] = { "IDLE" , "CALIBRATION" , "AUTO_START" , "BALANCE" , "GO_TO_START" , "TURN_TO_START" };
 eState state;
-
-void waitBnoCalibration() {
-	uint8_t system, gyro, accel, mag;
-	Serial3.println("*** Calibration ***");
-	while (true) {
-		system = gyro = accel = mag = 0;
-		bno.getCalibration(&system, &gyro, &accel, &mag);
-		if (system>1) break;
-		delay(500);
-	}
-	Serial3.println("*** Calibration Done ***");
-	euler    = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
-	rotation = bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE);
-	goalYaw = (euler.x()-180)*DEGREE_TO_RAD;
-}
 
 void setup() {
 	Serial.begin(115200);
@@ -69,10 +53,8 @@ void setup() {
 	Serial3.println("***************************");
 	pid.setDebug(false);
 	pid.setCoefficients(kP,kI,kD);
-	pid.setOutputRange(-255,255,0);
+	pid.setOutputRange(-255,255,neutralZone);
 	reset();
-	state = IDLE;
-	printState();
 	// BNO055
 	if(!bno.begin())
 	{
@@ -82,10 +64,19 @@ void setup() {
 	}
 	delay(1000);
 	bno.setExtCrystalUse(true);
-	waitBnoCalibration();
 	base.setParameters(BASE_WIDTH,WHEEL_RADIUS,360);
 	base.setDebug(false);
+	state = CALIBRATION;
+	printState();
 }
+
+void setState(eState _state) {
+	state = _state;
+	if (state==IDLE) reset();
+	stateEnterTime = millis();
+	printState();
+}
+
 void printState() {
 	Serial3.print(millis()/1000.0,2);
 	Serial3.print(" ");
@@ -154,29 +145,24 @@ void bluetoothLoop() {
 				cmd = 2;
 			else if (v=='a') {
 				if (state == IDLE) {
-					autoStartTime = millis();
-					state = AUTO_START;
+					setState(AUTO_START);
 				}
 			} else if (v=='s') {
 				if (state == IDLE) {
-					state = BALANCE;
-					printState();
+					setState(BALANCE);
 				} else {
-					reset();
-					state = IDLE;
-					printState();
+					setState(IDLE);
 				}
 			} else if (v=='t')
 				stablePitch = pitch;
 			else if (v=='r') {
-				Serial3.println("*** Reset starting position ***");
+				Serial3.println("*** Update starting position ***");
 				goalYaw = (euler.x()-180)*DEGREE_TO_RAD;
 				goalX   = base.x();
 				goalY   = base.y();
 			} else if (v=='b') {
 				if (state==IDLE) {
-					state = GO_TO_START;
-					printState();
+					setState(GO_TO_START);
 				}
 			}
 		} else {
@@ -202,40 +188,46 @@ void reset() {
 
 void loop()
 {
+
 	bluetoothLoop();
 	euler    = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
-	rotation = bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE);
 	pitch = euler.z();
-	velPitch  = rotation.z()*RAD_TO_DEGREE;
 	base.loop((euler.x()-180)*DEGREE_TO_RAD);
-
 
 	lastTime = curTime;
 	curTime = millis();
-	dt = (curTime-lastTime)/1000.0;
+
 
 	switch (state) {
 			case IDLE        : break;
+			case CALIBRATION : {
+				uint8_t system, gyro, accel, mag;
+				system = gyro = accel = mag = 0;
+				bno.getCalibration(&system, &gyro, &accel, &mag);
+				if (system>1) {
+					euler    = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
+					goalYaw = (euler.x()-180)*DEGREE_TO_RAD;
+					setState(IDLE);
+				}
+				break;
+			}
 			case AUTO_START : {
-				if ( curTime-autoStartTime < autoStart_moveTime ) {
+				if ( curTime-stateEnterTime < autoStart_moveTime ) {
 					int motorPwm = ( pitch>0 ? -autoStartPwm : autoStartPwm );
 					base.setMotorPwm(motorPwm,motorPwm);
 				} else {
 					base.setMotorPwm(0,0);
 					if (abs(pitch)<15) {
-						state = BALANCE;
-						printState();
+						setState(BALANCE);
 					}
-					if ( curTime-autoStartTime > autoStart_timeOut ) {
+					if (curTime-stateEnterTime > autoStart_timeOut ) {
 						Serial3.print(" Redo ");
 						Serial3.print(curTime);
 						Serial3.print(" ");
-						Serial3.print(autoStartTime);
+						Serial3.print(stateEnterTime);
 						Serial3.print(" ");
-						Serial3.print(autoStart_timeOut);
-						state = AUTO_START;
-						printState();
-						autoStartTime = curTime;
+						Serial3.println(autoStart_timeOut);
+						setState(AUTO_START);
 					}
 				}
 				break;
@@ -243,10 +235,11 @@ void loop()
 			case BALANCE : {
 				if (abs(pitch)>15) {
 					// Too much tilted
-					reset();
-					state = IDLE;
-					printState();
+					setState(IDLE);
 				} else {
+					double dt = (curTime-lastTime)/1000.0;
+					imu::Vector<3> rotation = bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE);
+					double velPitch  = rotation.z()*RAD_TO_DEGREE;
 					int pwm = pid.update(pitch-stablePitch,velPitch,dt);
 					base.setMotorPwm(pwm,pwm);
 				}
@@ -269,8 +262,7 @@ void loop()
 				//Serial3.print(errY,6);
 				if (errX*errX<0.0025 && errY*errY<0.0025) {
 					//Serial3.println(" --> TURN_TO_START");
-					state = TURN_TO_START;
-					printState();
+					setState(TURN_TO_START);
 				} else {
 					double v,w;
 					double lclGoalYaw = atan2(errY,errX);
@@ -308,10 +300,7 @@ void loop()
 				//Serial3.print(" --> errYaw:");
 				//Serial3.print(errYaw,6);
 				if (errYaw*errYaw<0.0025) {
-					//Serial3.println(" --> IDLE");
-					reset();
-					state = IDLE;
-					printState();
+					setState(IDLE);
 				} else {
 					double w = constrain(w_kP*errYaw,-wMax,wMax);
 					// Convert v,w to motorPwm
