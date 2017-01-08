@@ -22,7 +22,7 @@ Base base = Base(SLOT2,SLOT1);
 
 PID  pid;
 
-double  pitch,goalPitch,velPitch;
+double  pitch,velPitch;
 double  goalYaw;
 double  goalX,goalY;
 
@@ -33,13 +33,19 @@ double w_kP = 4;
 double kP = 16;
 double kI = 0;
 double kD = 0.3;
-bool   initialized = false;
-unsigned long time;
+double stablePitch = 0;
+unsigned long autoStart_moveTime = 250;
+int autoStartPwm = 200;
+
+unsigned long autoStart_timeOut  = 1000;
+
+unsigned long curTime;
 unsigned long lastTime;
+unsigned long autoStartTime;
 double   dt;
 
-enum eState                {  IDLE  ,  INITIALIZED  ,  BALANCE  ,  GO_TO_START  ,  TURN_TO_START  };
-const char * eStateStr[] = { "IDLE" , "INITIALIZED" , "BALANCE" , "GO_TO_START" , "TURN_TO_START" };
+enum eState                {  IDLE  ,  INITIALIZED  ,  AUTO_START  ,  BALANCE  ,  GO_TO_START  ,  TURN_TO_START  };
+const char * eStateStr[] = { "IDLE" , "INITIALIZED" , "AUTO_START" , "BALANCE" , "GO_TO_START" , "TURN_TO_START" };
 eState state;
 
 void waitBnoCalibration() {
@@ -60,10 +66,10 @@ void waitBnoCalibration() {
 void setup() {
 	Serial.begin(115200);
 	Serial3.begin(115200);
+	Serial3.println("***************************");
 	pid.setDebug(false);
 	pid.setCoefficients(kP,kI,kD);
 	pid.setOutputRange(-255,255,0);
-	goalPitch = 0;
 	reset();
 	state = IDLE;
 	printState();
@@ -81,47 +87,60 @@ void setup() {
 	base.setDebug(false);
 }
 void printState() {
-	Serial3.print("STATE :");
-	Serial3.print(eStateStr[state]);
-	//Serial3.print(" PID P:");
-	//Serial3.print(kP);
-	//Serial3.print(" I:");
-	//Serial3.print(kI);
-	//Serial3.print(" D:");
-	//Serial3.print(kD);
-	//Serial3.print(" Target:");
-	//Serial3.print(goalPitch);
-	Serial3.print(" Base x:");
-	Serial3.print(base.x());
-	Serial3.print(" y:");
-	Serial3.print(base.y());
-	Serial3.print(" yaw:");
-	Serial3.println(base.yaw());
+	Serial3.print(millis()/1000.0,2);
+	Serial3.print(" ");
+	Serial3.println(eStateStr[state]);
+	if (false) {
+		Serial3.print("    PID P:");
+		Serial3.print(kP);
+		Serial3.print(" I:");
+		Serial3.print(kI);
+		Serial3.print(" D:");
+		Serial3.print(kD);
+		Serial3.print(" Target:");
+		Serial3.print(stablePitch);
+	}
+	if (true) {
+		Serial3.print("    pos x:");
+		Serial3.print(base.x(),3);
+		Serial3.print(" y:");
+		Serial3.print(base.y(),3);
+		Serial3.print(" yaw:");
+		Serial3.println(base.yaw());
+	}
+	if (true) {
+		Serial3.print("    start x:");
+		Serial3.print(goalX,3);
+		Serial3.print(" y:");
+		Serial3.print(goalY,3);
+		Serial3.print(" yaw:");
+		Serial3.println(goalYaw);
+	}
 }
 
 int cmd = -1;
 int idx = 0;
 int val[10];
 void processCmd() {
-int value = 0;
-if (idx>0) {
-	bool inv = false;
-	for (int i=0;i<idx;i++) {
-		if (val[i]=='-')
-			inv = true;
-		else if ('9'>=val[i] && val[i]>='0')
-			value = value*10 + (val[i]-'0');
+	int value = 0;
+	if (idx>0) {
+		bool inv = false;
+		for (int i=0;i<idx;i++) {
+			if (val[i]=='-')
+				inv = true;
+			else if ('9'>=val[i] && val[i]>='0')
+				value = value*10 + (val[i]-'0');
+		}
+		if (inv) value = -value;
+		if (cmd==0)
+			kP = value/10.0;
+		else if (cmd==1)
+			kI = value/10.0;
+		else if (cmd==2)
+			kD = value/10.0;
+		if (cmd>=0 or cmd<=2)
+			pid.setCoefficients(kP,kI,kD);
 	}
-	if (inv) value = -value;
-	if (cmd==0)
-		kP = value/10.0;
-	else if (cmd==1)
-		kI = value/10.0;
-	else if (cmd==2)
-		kD = value/10.0;
-	if (cmd>=0 or cmd<=2)
-		pid.setCoefficients(kP,kI,kD);
-}
 }
 void bluetoothLoop() {
 	if (Serial3.available()) {
@@ -133,7 +152,12 @@ void bluetoothLoop() {
 				cmd = 1;
 			else if (v=='d')
 				cmd = 2;
-			else if (v=='s') {
+			else if (v=='a') {
+				if (state == IDLE) {
+					autoStartTime = millis();
+					state = AUTO_START;
+				}
+			} else if (v=='s') {
 				if (state == IDLE) {
 					state = BALANCE;
 					printState();
@@ -143,7 +167,7 @@ void bluetoothLoop() {
 					printState();
 				}
 			} else if (v=='t')
-				goalPitch = pitch;
+				stablePitch = pitch;
 			else if (v=='r') {
 				Serial3.println("*** Reset starting position ***");
 				goalYaw = (euler.x()-180)*DEGREE_TO_RAD;
@@ -173,7 +197,6 @@ void bluetoothLoop() {
 void reset() {
 	pid.reset();
 	base.stop();
-	Serial3.println("*** Reset ***");
 }
 
 
@@ -187,21 +210,44 @@ void loop()
 	base.loop((euler.x()-180)*DEGREE_TO_RAD);
 
 
-	lastTime = time;
-	time = millis();
-	dt = (time-lastTime)/1000.0;
+	lastTime = curTime;
+	curTime = millis();
+	dt = (curTime-lastTime)/1000.0;
 
 	switch (state) {
 			case IDLE        : break;
+			case AUTO_START : {
+				if ( curTime-autoStartTime < autoStart_moveTime ) {
+					int motorPwm = ( pitch>0 ? -autoStartPwm : autoStartPwm );
+					base.setMotorPwm(motorPwm,motorPwm);
+				} else {
+					base.setMotorPwm(0,0);
+					if (abs(pitch)<15) {
+						state = BALANCE;
+						printState();
+					}
+					if ( curTime-autoStartTime > autoStart_timeOut ) {
+						Serial3.print(" Redo ");
+						Serial3.print(curTime);
+						Serial3.print(" ");
+						Serial3.print(autoStartTime);
+						Serial3.print(" ");
+						Serial3.print(autoStart_timeOut);
+						state = AUTO_START;
+						printState();
+						autoStartTime = curTime;
+					}
+				}
+				break;
+			}
 			case BALANCE : {
 				if (abs(pitch)>15) {
-					// Too much tilted. Stop
-					Serial3.println("*** Stop ***");
+					// Too much tilted
 					reset();
 					state = IDLE;
 					printState();
 				} else {
-					int pwm = pid.update(pitch-goalPitch,velPitch,dt);
+					int pwm = pid.update(pitch-stablePitch,velPitch,dt);
 					base.setMotorPwm(pwm,pwm);
 				}
 				break;
