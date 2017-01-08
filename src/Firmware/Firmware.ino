@@ -18,7 +18,7 @@ Adafruit_BNO055 bno = Adafruit_BNO055(55);
 imu::Vector<3> euler;
 imu::Vector<3> rotation;
 
-BaseLocalizer base = BaseLocalizer(SLOT2,SLOT1);
+Base base = Base(SLOT2,SLOT1);
 
 PID  pid;
 

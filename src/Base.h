@@ -18,9 +18,9 @@ void processEncoderRInt(void) {
 		EncoderR->pulsePosPlus();;
 }
 
-class BaseLocalizer {
+class Base {
 	public:
-		BaseLocalizer(uint8_t slotL,uint8_t slotR)
+		Base(uint8_t slotL,uint8_t slotR)
 			:	debug(false)
 			,	_x(0)
 			,	_y(0)
@@ -66,7 +66,7 @@ class BaseLocalizer {
 			curVL = dl/dt;
 			curW  = dyaw/dt;
 			if (debug && (newTicksL!=ticksL) && (newTicksR!=ticksR)) {
-				Serial3.print("BaseLocalizer tl: ");
+				Serial3.print("Base tl: ");
 				Serial3.print(newTicksL);
 				Serial3.print(" tr: ");
 				Serial3.print(newTicksR);
