@@ -7,6 +7,7 @@
 #include "PID.h"
 #include "BaseLocalizer.h"
 
+#define abs(x) ((x)>0?(x):-(x)) //math.h overwrite abs
 #define RAD_TO_DEGREE 57.2957795   // 180/3.141592
 #define DEGREE_TO_RAD 0.0174532925 // 3.141592/180
 
@@ -20,25 +21,21 @@ imu::Vector<3> rotation;
 BaseLocalizer base = BaseLocalizer(SLOT2,SLOT1);
 
 PID  pid;
-int pwm,zPwm;
-int lMotorPwm;
-int rMotorPwm;
 
 double  pitch,goalPitch,velPitch;
 double  goalYaw;
 double  goalX,goalY;
 
-double vMax = 0.05;
-double wMax = 1;
-double w_kP = 1;
+double vMax = 0.5;
+double wMax = 4;
+double w_kP = 4;
 
 double kP = 16;
-double kI = 10;
+double kI = 0;
 double kD = 0.3;
 bool   initialized = false;
 unsigned long time;
 unsigned long lastTime;
-unsigned long lastPrintStateTime;
 double   dt;
 
 enum eState                {  IDLE  ,  INITIALIZED  ,  BALANCE  ,  GO_TO_START  ,  TURN_TO_START  };
@@ -48,7 +45,7 @@ eState state;
 void waitBnoCalibration() {
 	uint8_t system, gyro, accel, mag;
 	Serial3.println("*** Calibration ***");
-	while (1) {
+	while (true) {
 		system = gyro = accel = mag = 0;
 		bno.getCalibration(&system, &gyro, &accel, &mag);
 		if (system>1) break;
@@ -57,7 +54,7 @@ void waitBnoCalibration() {
 	Serial3.println("*** Calibration Done ***");
 	euler    = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
 	rotation = bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE);
-	goalYaw = euler.x()*DEGREE_TO_RAD;
+	goalYaw = (euler.x()-180)*DEGREE_TO_RAD;
 }
 
 void setup() {
@@ -68,6 +65,7 @@ void setup() {
 	pid.setOutputRange(-255,255,0);
 	goalPitch = 0;
 	reset();
+	state = IDLE;
 	printState();
 	// BNO055
 	if(!bno.begin())
@@ -80,7 +78,7 @@ void setup() {
 	bno.setExtCrystalUse(true);
 	waitBnoCalibration();
 	base.setParameters(BASE_WIDTH,WHEEL_RADIUS,360);
-	base.setDebug(true);
+	base.setDebug(false);
 }
 void printState() {
 	Serial3.print("STATE :");
@@ -93,17 +91,12 @@ void printState() {
 	//Serial3.print(kD);
 	//Serial3.print(" Target:");
 	//Serial3.print(goalPitch);
-	Serial3.print(" yaw:");
-	Serial3.print(euler.x());
-	Serial3.print(" roll:");
-	Serial3.print(euler.y());
-	Serial3.print(" pitch:");
-	Serial3.print(euler.z());
-	Serial3.print(" X:");
+	Serial3.print(" Base x:");
 	Serial3.print(base.x());
-	Serial3.print(" Y::");
-	Serial3.println(base.y());
-	lastPrintStateTime = millis();
+	Serial3.print(" y:");
+	Serial3.print(base.y());
+	Serial3.print(" yaw:");
+	Serial3.println(base.yaw());
 }
 
 int cmd = -1;
@@ -143,18 +136,23 @@ void bluetoothLoop() {
 			else if (v=='s') {
 				if (state == IDLE) {
 					state = BALANCE;
+					printState();
 				} else {
 					reset();
+					state = IDLE;
+					printState();
 				}
 			} else if (v=='t')
 				goalPitch = pitch;
 			else if (v=='r') {
-				goalYaw = euler.x()*DEGREE_TO_RAD;
+				Serial3.println("*** Reset starting position ***");
+				goalYaw = (euler.x()-180)*DEGREE_TO_RAD;
 				goalX   = base.x();
 				goalY   = base.y();
 			} else if (v=='b') {
 				if (state==IDLE) {
 					state = GO_TO_START;
+					printState();
 				}
 			}
 		} else {
@@ -173,11 +171,9 @@ void bluetoothLoop() {
 }
 
 void reset() {
-	lMotorPwm  = 0;
-	rMotorPwm  = 0;
 	pid.reset();
+	base.stop();
 	Serial3.println("*** Reset ***");
-	state = IDLE;
 }
 
 
@@ -188,7 +184,7 @@ void loop()
 	rotation = bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE);
 	pitch = euler.z();
 	velPitch  = rotation.z()*RAD_TO_DEGREE;
-	base.updatePosition(euler.x()*DEGREE_TO_RAD);
+	base.loop((euler.x()-180)*DEGREE_TO_RAD);
 
 
 	lastTime = time;
@@ -203,80 +199,84 @@ void loop()
 					Serial3.println("*** Stop ***");
 					reset();
 					state = IDLE;
+					printState();
 				} else {
-					pwm = pid.update(pitch-goalPitch,velPitch,dt);
-					lMotorPwm = pwm;
-					rMotorPwm = pwm;
+					int pwm = pid.update(pitch-goalPitch,velPitch,dt);
+					base.setMotorPwm(pwm,pwm);
 				}
 				break;
 			}
 			case GO_TO_START : {
 				double errX = goalX-base.x();
 				double errY = goalY-base.y();
-				Serial3.print("     errX:");
-				Serial3.print(errX);
-				Serial3.print(" errY:");
-				Serial3.print(errY);
-				if (errX*errX<0.04 and errY*errY<0.04) {
-					Serial3.println(" -> TURN_TO_START");
+				//Serial3.print("GO_TO_START from x:");
+				//Serial3.print(base.x());
+				//Serial3.print(" y:");
+				//Serial3.print(base.y());
+				//Serial3.print(" to x:");
+				//Serial3.print(goalX);
+				//Serial3.print(" y:");
+				//Serial3.print(goalY);
+				//Serial3.print("  -->   errX:");
+				//Serial3.print(errX,6);
+				//Serial3.print(" errY:");
+				//Serial3.print(errY,6);
+				if (errX*errX<0.0025 && errY*errY<0.0025) {
+					//Serial3.println(" --> TURN_TO_START");
 					state = TURN_TO_START;
+					printState();
 				} else {
 					double v,w;
-					double errYaw = atan2(errY,errX)-base.yaw();
-					Serial3.print(" errYaw:");
-					Serial3.print(errYaw);
-					errYaw = atan2(sin(errYaw),cos(errYaw));
-					Serial3.print(" errYaw:");
-					Serial3.print(errYaw);
+					double lclGoalYaw = atan2(errY,errX);
+					double errYaw = lclGoalYaw-base.yaw();
+					errYaw = atan2(sin(errYaw),cos(errYaw)); // Normalize
+					//Serial3.print(" yaw:");
+					//Serial3.print(base.yaw());
+					//Serial3.print(" goalYaw:");
+					//Serial3.print(lclGoalYaw);
+					//Serial3.print(" --> errYaw:");
+					//Serial3.print(errYaw);
 					w = constrain(w_kP*errYaw,-wMax,wMax);
-					if (abs(errYaw)<0.75) {
-						v = -vMax/pow(abs(w)+1,0.5);
+					if (abs(errYaw)<0.25) {
+						v = vMax/pow(abs(w)+1,0.5);
 					} else {
 						v = 0;
 					}
 					// Convert v,w to motorPwm
-					rMotorPwm = 50*(v+w*BASE_WIDTH/2)/vMax;
-					lMotorPwm = 50*(v-w*BASE_WIDTH/2)/vMax;
-					Serial3.print(" w:");
-					Serial3.print(w);
-					Serial3.print(" v:");
-					Serial3.print(v);
-					Serial3.print(" lPwm:");
-					Serial3.print(lMotorPwm);
-					Serial3.print(" rPwm:");
-					Serial3.print(rMotorPwm);
-					Serial3.println();
+					base.setSpeed(v,w);
+					//Serial3.print(" --> w:");
+					//Serial3.print(w);
+					//Serial3.print(" v:");
+					//Serial3.print(v);
+					//Serial3.println();
 				}
 				break;
 			}
 			case TURN_TO_START : {
 				double errYaw = goalYaw-base.yaw();
 				errYaw = atan2(sin(errYaw),cos(errYaw));
-				Serial3.print(" errYaw:");
-				Serial3.print(errYaw);
-				if (errYaw*errYaw<0.05) {
+				//Serial3.print("TURN_TO_START from yaw:");
+				//Serial3.print(base.yaw(),6);
+				//Serial3.print(" to yaw:");
+				//Serial3.print(goalYaw,6);
+				//Serial3.print(" --> errYaw:");
+				//Serial3.print(errYaw,6);
+				if (errYaw*errYaw<0.0025) {
+					//Serial3.println(" --> IDLE");
 					reset();
-					Serial3.println(" -> IDLE");
 					state = IDLE;
+					printState();
 				} else {
 					double w = constrain(w_kP*errYaw,-wMax,wMax);
 					// Convert v,w to motorPwm
-					rMotorPwm = 50*w*(BASE_WIDTH/2)/vMax;
-					lMotorPwm = 50*-w*(BASE_WIDTH/2)/vMax;
-					Serial3.print(" rPwm:");
-					Serial3.print(rMotorPwm);
-					Serial3.print(" lPwm:");
-					Serial3.print(lMotorPwm);
-					Serial3.println();
+					//Serial3.print(" --> w:");
+					//Serial3.print(w,6);
+					//Serial3.println();
+					base.setSpeed(0,w);
 				}
 				break;
 			}
 		}
-		if (time-lastPrintStateTime>1000)
-			printState();
-
-		base.setMotorPwm(lMotorPwm,rMotorPwm);
-
-		delay(10);
+		delay(20);
 }
 
