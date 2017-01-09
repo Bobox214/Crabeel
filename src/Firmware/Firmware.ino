@@ -35,7 +35,7 @@ double kD = 0.3;
 uint8_t neutralZone = 0;
 double stablePitch = 0;
 unsigned long autoStart_moveTime = 250;
-int autoStartPwm = 255;
+int autoStartPwm = 220;
 
 unsigned long autoStart_timeOut  = 1000;
 
@@ -213,7 +213,8 @@ void loop()
 			}
 			case AUTO_START : {
 				if ( curTime-stateEnterTime < autoStart_moveTime ) {
-					int motorPwm = ( pitch>0 ? -autoStartPwm : autoStartPwm );
+					int motorPwm = autoStartPwm*(((double)(curTime-stateEnterTime))/autoStart_moveTime);
+					if (pitch>0) motorPwm = -motorPwm;
 					base.setMotorPwm(motorPwm,motorPwm);
 				} else {
 					base.setMotorPwm(0,0);
