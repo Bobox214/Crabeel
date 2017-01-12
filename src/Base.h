@@ -135,7 +135,14 @@ class Base {
 			goalVR = v-w*baseWidth/2;
 			goalVL = v+w*baseWidth/2;
 		}
-			
+		void print() {
+			Serial3.print("# Base - x:");
+			Serial3.print(x(),3);
+			Serial3.print(" y:");
+			Serial3.print(y(),3);
+			Serial3.print(" yaw:");
+			Serial3.println(yaw());
+		}
 		void stop() {
 			EncoderL->setMotorPwm(0);
 			EncoderR->setMotorPwm(0);
