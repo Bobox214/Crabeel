@@ -59,6 +59,7 @@ class Configuration {
 			autoStartPwm = random(MINPWMSTART,MAXPWMSTART+1);
 			autoStartDuration = random(0,MAXAUTOSTART+1);
 			neutralZone = random(0,MAXNEUTRAL+1);
+			resetScore();
 		}
 		void saveToEEPROM(int idx) {
 			if ( (idx%32) != 0 ) {
@@ -88,6 +89,7 @@ class Configuration {
 		}
 		void resetScore() {
 			runIdx = 0;
+			score  = 0;
 		}
 		void addScore(uint16_t score) {
 			if (runIdx>NBSCORES-1) {

@@ -34,6 +34,7 @@ double w_kP = 4;
 Configuration *currentConf;
 
 unsigned long autoStart_timeOut  = 1000;
+uint8_t       autoStart_count;
 
 unsigned long curTime;
 unsigned long lastTime;
@@ -74,6 +75,11 @@ void setup() {
 }
 
 void setState(eState _state) {
+	if (_state==AUTO_START && state!=AUTO_START) {
+		autoStart_count = 0;
+	} else {
+		autoStart_count += 1;
+	}
 	state = _state;
 	if (state==IDLE) reset();
 	stateEnterTime = millis();
@@ -96,6 +102,10 @@ void printState() {
 	if (state==SCORE_CONF) {
 		Serial3.print(" ");
 		Serial3.print(nbScore);
+	}
+	if (state==AUTO_START) {
+		Serial3.print(" ");
+		Serial3.print(autoStart_count);
 	}
 	Serial3.println();
 }
@@ -158,6 +168,9 @@ void bluetoothLoop() {
 				currentConf->print();
 			} else if (v==' ') {
 				printState();
+				base.print();
+				printOrigin();
+				currentConf->print();
 			} else if (v=='t') {
 				currentConf->balancePitch = pitch;
 				currentConf->print();
@@ -165,13 +178,6 @@ void bluetoothLoop() {
 			else if (v=='r') {
 				currentConf->randomize();
 				currentConf->print();
-				//Serial3.println("*** Update starting position ***");
-				//goalYaw = (euler.x()-180)*DEGREE_TO_RAD;
-				//goalX   = base.x();
-				//goalY   = base.y();
-			} else if (v=='b') {
-				base.print();
-				printOrigin();
 			} else if (v=='o') {
 				if (state==IDLE) {
 					setState(GO_ORIGIN);
@@ -233,13 +239,10 @@ void loop()
 						setState(BALANCE);
 					}
 					if (curTime-stateEnterTime > autoStart_timeOut ) {
-						Serial3.print(" Redo ");
-						Serial3.print(curTime);
-						Serial3.print(" ");
-						Serial3.print(stateEnterTime);
-						Serial3.print(" ");
-						Serial3.println(autoStart_timeOut);
-						setState(AUTO_START);
+						if (autoStart_count<5) 
+							setState(AUTO_START);
+						else
+							setState(BALANCE); // Force moving on
 					}
 				}
 				break;
@@ -297,10 +300,17 @@ void loop()
 						base.setSpeed(0,w);
 					}
 				} else {
+					int8_t vM;
 					double v,w;
 					double lclGoalYaw = atan2(errY,errX);
 					double errYaw = lclGoalYaw-base.yaw();
 					errYaw = atan2(sin(errYaw),cos(errYaw)); // Normalize
+					if (abs(errYaw)>PI/2) {
+						errYaw = atan2(sin(errYaw+PI),cos(errYaw+PI)); // Normalize
+						vM = -1;
+					} else {
+						vM = 1;
+					}
 					//Serial3.print(" yaw:");
 					//Serial3.print(base.yaw());
 					//Serial3.print(" goalYaw:");
@@ -309,7 +319,7 @@ void loop()
 					//Serial3.print(errYaw);
 					w = constrain(w_kP*errYaw,-wMax,wMax);
 					if (abs(errYaw)<0.25) {
-						v = vMax/pow(abs(w)+1,0.5);
+						v = vM*vMax/pow(abs(w)+1,0.5);
 					} else {
 						v = 0;
 					}
@@ -339,7 +349,7 @@ void loop()
 						} else {
 							currentConf->compileScore();
 							currentConf->print();
-							setState(IDLE);
+							setState(GO_ORIGIN);
 						}
 					}
 				}
