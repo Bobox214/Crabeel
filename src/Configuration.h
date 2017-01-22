@@ -88,8 +88,8 @@ class Configuration {
 		uint16_t debugCreateScore() {
 			resetScore();
 			uint16_t score = 0;
-			score += 100*abs(kP-kI);
-			score -= 100*kD;
+			score += 10*(100-abs(kP-kI));
+			score -= 10*kD;
 			score -= abs(balancePitch);
 			score += abs(250-autoStartDuration);
 			score += autoStartPwm;
@@ -138,26 +138,28 @@ class Configuration {
 		}
 		void setChildOf(Configuration* father, Configuration* mother) {
 			setCoefficients(
-				random(90,110)/100.0*(random(2)==0 ? father->kP                : mother->kP                )
-			,	random(90,110)/100.0*(random(2)==0 ? father->kI                : mother->kI                )
-			,	random(90,110)/100.0*(random(2)==0 ? father->kD                : mother->kD                )
-			,	random(90,110)/100.0*(random(2)==0 ? father->balancePitch      : mother->balancePitch      )
-			,	random(90,110)/100.0*(random(2)==0 ? father->autoStartDuration : mother->autoStartDuration )
-			,	random(90,110)/100.0*(random(2)==0 ? father->autoStartPwm      : mother->autoStartPwm      )
-			,	random(90,110)/100.0*(random(2)==0 ? father->neutralZone       : mother->neutralZone       )
+				random(70,130)/100.0*(random(2)==0 ? father->kP                : mother->kP                )
+			,	random(70,130)/100.0*(random(2)==0 ? father->kI                : mother->kI                )
+			,	random(70,130)/100.0*(random(2)==0 ? father->kD                : mother->kD                )
+			,	random(70,130)/100.0*(random(2)==0 ? father->balancePitch      : mother->balancePitch      )
+			,	random(70,130)/100.0*(random(2)==0 ? father->autoStartDuration : mother->autoStartDuration )
+			,	random(70,130)/100.0*(random(2)==0 ? father->autoStartPwm      : mother->autoStartPwm      )
+			,	random(70,130)/100.0*(random(2)==0 ? father->neutralZone       : mother->neutralZone       )
 			);
 		}
-		void mutate() {
-			uint8_t i = random(0,7);
-			setCoefficients(
-				i==0 ? (random(70,130)/100.0)*kP                : kP
-			,	i==1 ? (random(70,130)/100.0)*kI                : kI
-			,	i==2 ? (random(70,130)/100.0)*kD                : kD
-			,	i==3 ? (random(70,130)/100.0)*balancePitch      : balancePitch
-			,	i==4 ? (random(70,130)/100.0)*autoStartDuration : autoStartDuration
-			,	i==5 ? (random(70,130)/100.0)*autoStartPwm      : autoStartPwm
-			,	i==6 ? (random(70,130)/100.0)*neutralZone       : neutralZone
-			);
+		void mutate(uint8_t nbMutation) {
+			for (uint8_t j=0;j<nbMutation;j++) {
+				uint8_t i = random(0,7);
+				setCoefficients(
+					i==0 ? (random(50,150)/100.0)*kP                : kP
+				,	i==1 ? (random(50,150)/100.0)*kI                : kI
+				,	i==2 ? (random(50,150)/100.0)*kD                : kD
+				,	i==3 ? (random(50,150)/100.0)*balancePitch      : balancePitch
+				,	i==4 ? (random(50,150)/100.0)*autoStartDuration : autoStartDuration
+				,	i==5 ? (random(50,150)/100.0)*autoStartPwm      : autoStartPwm
+				,	i==6 ? (random(50,150)/100.0)*neutralZone       : neutralZone
+				);
+			}
 		}
 	public:
 		uint16_t score;

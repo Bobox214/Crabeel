@@ -6,15 +6,16 @@
 #define NBCONFPARENTS 3
 #define NBCONFCHILDS  2
 #define NBCONFMUTATE  4
+#define NBITEMMUTATE  2
 #define SYNC  0xFACE
 
 class Generation {
 	public:
 		Generation() {
-			level = 0;
 			for (int i=0;i<NBCONFS;i++) {
 				configuration[i] = new Configuration();
 			}
+			randomize();
 		}
 		void randomize() {
 			level = 0;
@@ -54,6 +55,10 @@ class Generation {
 			// Randomize the first configuration
 			for (;curIdx<NBCONFRAND;curIdx++){
 				configuration[curIdx]->randomize();
+				configuration[curIdx]->setChildOf(
+					configuration[NBCONFS-1]
+				,	configuration[curIdx]
+				);
 			}
 			// Create child from best and less best
 			for (uint8_t i=0;i<NBCONFPARENTS;i++) {
@@ -66,9 +71,9 @@ class Generation {
 				}
 			}
 			// Keep the best ones
-			// Mutate
+			// Mutate, never the best configuration
 			for (uint8_t i=0;i<NBCONFMUTATE;i++) {
-				configuration[random(0,NBCONFS)]->mutate();
+				configuration[random(0,NBCONFS-1)]->mutate(NBITEMMUTATE);
 			}
 			// Reset scores
 			for (uint8_t i=0;i<NBCONFS;i++)
