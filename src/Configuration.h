@@ -13,17 +13,23 @@
 
 class Configuration {
 	public:
-		Configuration(
+		Configuration() {
+			resetScore();
+		}
+		void setCoefficients(
 			double kP,double kI,double kD
 		,	double balancePitch
 		,	uint16_t autoStartDuration,uint8_t autoStartPwm
 		,	uint8_t neutralZone
-		)	:	kP(kP),kI(kI),kD(kD)
-			,	balancePitch(balancePitch)
-			,	autoStartDuration(autoStartDuration)
-			,	autoStartPwm(autoStartPwm)
-			,	neutralZone(neutralZone)
-		{
+		) {
+			this->kP = constrain(kP,0,MAXKP);
+			this->kI = constrain(kI,0,MAXKI);
+			this->kD = constrain(kD,0,MAXKD);
+			this->balancePitch      = constrain(balancePitch,MINPITCH,MAXPITCH);
+			this->autoStartDuration = constrain(autoStartDuration,0,MAXAUTOSTART);
+			this->autoStartPwm      = constrain(autoStartPwm,MINPWMSTART,MAXPWMSTART);
+			this->neutralZone       = constrain(neutralZone,0,MAXNEUTRAL);
+			resetScore();
 		}
 		double   kP,kI,kD;
 		double   balancePitch;
@@ -62,10 +68,6 @@ class Configuration {
 			resetScore();
 		}
 		void saveToEEPROM(int idx) {
-			if ( (idx%32) != 0 ) {
-				Serial3.println("#### ERROR #### Not saved to EEPROM, invalid idx");
-				return;
-			}
 			EEPROM.put(idx   ,kP);
 			EEPROM.put(idx+4 ,kI);
 			EEPROM.put(idx+8 ,kD);
@@ -75,10 +77,6 @@ class Configuration {
 			EEPROM.put(idx+19,neutralZone);
 		}
 		void loadFromEEPROM(int idx) {
-			if ( (idx%32) != 0 ) {
-				Serial3.println("#### ERROR #### Not loaded from EEPROM, invalid idx");
-				return;
-			}
 			EEPROM.get(idx   ,kP);
 			EEPROM.get(idx+4 ,kI);
 			EEPROM.get(idx+8 ,kD);
@@ -87,6 +85,21 @@ class Configuration {
 			EEPROM.get(idx+18,autoStartPwm);
 			EEPROM.get(idx+19,neutralZone);
 		}
+		uint16_t debugCreateScore() {
+			resetScore();
+			uint16_t score = 0;
+			score += 100*abs(kP-kI);
+			score -= 100*kD;
+			score -= abs(balancePitch);
+			score += abs(250-autoStartDuration);
+			score += autoStartPwm;
+			score -= abs(neutralZone);
+			for (int j=0;j<NBSCORES;j++) {
+				addScore(score);
+			}
+			compileScore();
+		}
+			
 		void resetScore() {
 			runIdx = 0;
 			score  = 0;
@@ -123,9 +136,32 @@ class Configuration {
 				sum += runScores[i];
 			score = sum/6;
 		}
-				
+		void setChildOf(Configuration* father, Configuration* mother) {
+			setCoefficients(
+				random(90,110)/100.0*(random(2)==0 ? father->kP                : mother->kP                )
+			,	random(90,110)/100.0*(random(2)==0 ? father->kI                : mother->kI                )
+			,	random(90,110)/100.0*(random(2)==0 ? father->kD                : mother->kD                )
+			,	random(90,110)/100.0*(random(2)==0 ? father->balancePitch      : mother->balancePitch      )
+			,	random(90,110)/100.0*(random(2)==0 ? father->autoStartDuration : mother->autoStartDuration )
+			,	random(90,110)/100.0*(random(2)==0 ? father->autoStartPwm      : mother->autoStartPwm      )
+			,	random(90,110)/100.0*(random(2)==0 ? father->neutralZone       : mother->neutralZone       )
+			);
+		}
+		void mutate() {
+			uint8_t i = random(0,7);
+			setCoefficients(
+				i==0 ? (random(70,130)/100.0)*kP                : kP
+			,	i==1 ? (random(70,130)/100.0)*kI                : kI
+			,	i==2 ? (random(70,130)/100.0)*kD                : kD
+			,	i==3 ? (random(70,130)/100.0)*balancePitch      : balancePitch
+			,	i==4 ? (random(70,130)/100.0)*autoStartDuration : autoStartDuration
+			,	i==5 ? (random(70,130)/100.0)*autoStartPwm      : autoStartPwm
+			,	i==6 ? (random(70,130)/100.0)*neutralZone       : neutralZone
+			);
+		}
+	public:
+		uint16_t score;
 	private:
 		uint8_t  runIdx;
 		uint16_t runScores[NBSCORES];
-		uint16_t score;
 };

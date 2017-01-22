@@ -6,7 +6,7 @@
 #include <utility/imumaths.h>
 #include "PID.h"
 #include "Base.h"
-#include "Configuration.h"
+#include "Generation.h"
 
 #define abs(x) ((x)>0?(x):-(x)) //math.h overwrite abs
 #define RAD_TO_DEGREE 57.2957795   // 180/3.141592
@@ -31,6 +31,8 @@ double wMax = 4;
 double w_kP = 4;
 
 
+Generation    *currentGeneration;
+uint8_t        currentConfIdx;
 Configuration *currentConf;
 
 unsigned long autoStart_timeOut  = 1000;
@@ -46,19 +48,24 @@ const char * eStateStr[] = { "IDLE" , "CALIBRATION" , "AUTO_START" , "BALANCE" ,
 eState state;
 uint8_t nbScore;
 
+void setCurrentConf(uint8_t idx) {
+	currentConfIdx = 0;
+	currentConf = currentGeneration->configuration[currentConfIdx];
+}
+
 void setup() {
 	Serial.begin(115200);
 	Serial3.begin(115200);
 	Serial3.println("***************************");
-	currentConf = new Configuration(
+	currentGeneration = new Generation();
+	setCurrentConf(0);
+	currentConf->setCoefficients(
 		16.0,0.0,0.3
 	,	0.0
 	,	250,220
 	,	0
 	);
 	pid.setDebug(false);
-	pid.setCoefficients(currentConf->kP,currentConf->kI,currentConf->kD);
-	pid.setOutputRange(-255,255,currentConf->neutralZone);
 	reset();
 	// BNO055
 	if(!bno.begin())
@@ -82,6 +89,10 @@ void setState(eState _state) {
 	}
 	state = _state;
 	if (state==IDLE) reset();
+	if (state==BALANCE) {
+		pid.setCoefficients(currentConf->kP,currentConf->kI,currentConf->kD);
+		pid.setOutputRange(-255,255,currentConf->neutralZone);
+	}
 	stateEnterTime = millis();
 	printState();
 }
@@ -171,17 +182,24 @@ void bluetoothLoop() {
 				base.print();
 				printOrigin();
 				currentConf->print();
+				currentGeneration->print();
 			} else if (v=='t') {
 				currentConf->balancePitch = pitch;
 				currentConf->print();
 			}
 			else if (v=='r') {
-				currentConf->randomize();
-				currentConf->print();
+				currentGeneration->randomize();
+				currentGeneration->print();
 			} else if (v=='o') {
 				if (state==IDLE) {
 					setState(GO_ORIGIN);
 				}
+			} else if (v=='h') {
+				currentGeneration->debugCreateScores();
+				currentGeneration->print();
+			} else if (v=='g') {
+				currentGeneration->breed();
+				currentGeneration->print();
 			}
 		} else {
 			if (v == ';') {
