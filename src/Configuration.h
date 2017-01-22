@@ -1,6 +1,15 @@
 #include <EEPROM.h>
 
 #define NBSCORES 10
+#define MAXKP 100
+#define MAXKI 100
+#define MAXKD  10
+#define MINPITCH -2
+#define MAXPITCH  2
+#define MAXAUTOSTART 1000
+#define MINPWMSTART  100
+#define MAXPWMSTART  255
+#define MAXNEUTRAL   255
 
 class Configuration {
 	public:
@@ -36,7 +45,20 @@ class Configuration {
 			Serial3.print(autoStartDuration); 
 			Serial3.print("ms - neutral:"); 
 			Serial3.print(neutralZone); 
+			if (score!=0) {
+				Serial3.print(" -> score:");
+				Serial3.print(score);
+			}
 			Serial3.println();
+		}
+		void randomize() {
+			kP = random(0,10*MAXKP+1)/10.0;
+			kI = random(0,10*MAXKI+1)/10.0;
+			kD = random(0,100*MAXKD+1)/100.0;
+			balancePitch = random(10*MINPITCH,10*MAXPITCH)/10.0;
+			autoStartPwm = random(MINPWMSTART,MAXPWMSTART+1);
+			autoStartDuration = random(0,MAXAUTOSTART+1);
+			neutralZone = random(0,MAXNEUTRAL+1);
 		}
 		void saveToEEPROM(int idx) {
 			if ( (idx%32) != 0 ) {
@@ -68,15 +90,18 @@ class Configuration {
 			runIdx = 0;
 		}
 		void addScore(uint16_t score) {
-			if (runIdx>=NBSCORES-1) {
-				Serial3.print("#### ERROR #### Cannot add score. Too much runs");
+			if (runIdx>NBSCORES-1) {
+				Serial3.println("#### ERROR #### Cannot add score. Too much runs");
+				return;
 			}
 			runScores[runIdx] = score;
 			runIdx++;
 		}
 		void compileScore() {
-			if (runIdx!=NBSCORES-1) {
-				Serial3.print("#### ERROR #### Cannot compile score. Not enough runs");
+			if (runIdx!=NBSCORES) {
+				Serial3.print("#### ERROR #### Cannot compile score. Not enough runs; runIdx=");
+				Serial3.print(runIdx);
+				Serial3.println();
 				score = 0;
 				return;
 			}
@@ -95,8 +120,6 @@ class Configuration {
 			for (uint8_t i=2;i<NBSCORES-2;i++)
 				sum += runScores[i];
 			score = sum/6;
-			Serial3.print("# Configuration score:");
-			Serial3.println(score);
 		}
 				
 	private:

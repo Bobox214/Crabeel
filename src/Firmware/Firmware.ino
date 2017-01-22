@@ -38,10 +38,12 @@ unsigned long autoStart_timeOut  = 1000;
 unsigned long curTime;
 unsigned long lastTime;
 unsigned long stateEnterTime; // Time in millis when current state was entered
+unsigned long balanceTime; // Time in millis when current state was entered
 
-enum eState                {  IDLE  ,  CALIBRATION  ,  AUTO_START  ,  BALANCE  ,  GO_ORIGIN  };
-const char * eStateStr[] = { "IDLE" , "CALIBRATION" , "AUTO_START" , "BALANCE" , "GO_ORIGIN" };
+enum eState                {  IDLE  ,  CALIBRATION  ,  AUTO_START  ,  BALANCE  ,  SCORE_CONF  ,  GO_ORIGIN  };
+const char * eStateStr[] = { "IDLE" , "CALIBRATION" , "AUTO_START" , "BALANCE" , "SCORE_CONF" , "GO_ORIGIN" };
 eState state;
+uint8_t nbScore;
 
 void setup() {
 	Serial.begin(115200);
@@ -68,8 +70,7 @@ void setup() {
 	bno.setExtCrystalUse(true);
 	base.setParameters(BASE_WIDTH,WHEEL_RADIUS,360);
 	base.setDebug(false);
-	state = CALIBRATION;
-	printState();
+	setState(CALIBRATION);
 }
 
 void setState(eState _state) {
@@ -91,7 +92,12 @@ void printOrigin() {
 void printState() {
 	Serial3.print(millis()/1000.0,2);
 	Serial3.print(" ");
-	Serial3.println(eStateStr[state]);
+	Serial3.print(eStateStr[state]);
+	if (state==SCORE_CONF) {
+		Serial3.print(" ");
+		Serial3.print(nbScore);
+	}
+	Serial3.println();
 }
 
 int cmd = -1;
@@ -136,6 +142,8 @@ void bluetoothLoop() {
 				if (state == IDLE) {
 					setState(AUTO_START);
 				}
+			} else if (v=='q') {
+				setState(SCORE_CONF);
 			} else if (v=='s') {
 				if (state == IDLE) {
 					setState(BALANCE);
@@ -155,10 +163,12 @@ void bluetoothLoop() {
 				currentConf->print();
 			}
 			else if (v=='r') {
-				Serial3.println("*** Update starting position ***");
-				goalYaw = (euler.x()-180)*DEGREE_TO_RAD;
-				goalX   = base.x();
-				goalY   = base.y();
+				currentConf->randomize();
+				currentConf->print();
+				//Serial3.println("*** Update starting position ***");
+				//goalYaw = (euler.x()-180)*DEGREE_TO_RAD;
+				//goalX   = base.x();
+				//goalY   = base.y();
 			} else if (v=='b') {
 				base.print();
 				printOrigin();
@@ -183,6 +193,7 @@ void bluetoothLoop() {
 void reset() {
 	pid.reset();
 	base.stop();
+	nbScore = 0;
 }
 
 
@@ -236,7 +247,12 @@ void loop()
 			case BALANCE : {
 				if (abs(pitch)>15) {
 					// Too much tilted
-					setState(IDLE);
+					balanceTime = curTime-stateEnterTime;
+					if (nbScore==0) {
+						setState(IDLE);
+					} else {
+						setState(SCORE_CONF);
+					}
 				} else {
 					double dt = (curTime-lastTime)/1000.0;
 					imu::Vector<3> rotation = bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE);
@@ -304,6 +320,28 @@ void loop()
 					//Serial3.print(" v:");
 					//Serial3.print(v);
 					//Serial3.println();
+				}
+				break;
+			}
+			case SCORE_CONF : {
+				// Delay scoring to let times between auto starts
+				base.stop();
+				if (curTime-stateEnterTime>=500) {
+					if (nbScore==0) {
+						currentConf->resetScore();
+						nbScore = 1;
+						setState(AUTO_START);
+					} else {
+						currentConf->addScore(balanceTime);
+						if (nbScore<NBSCORES) {
+							nbScore += 1;
+							setState(AUTO_START);
+						} else {
+							currentConf->compileScore();
+							currentConf->print();
+							setState(IDLE);
+						}
+					}
 				}
 				break;
 			}
