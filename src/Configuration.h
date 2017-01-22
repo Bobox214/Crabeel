@@ -75,6 +75,7 @@ class Configuration {
 			EEPROM.put(idx+16,autoStartDuration);
 			EEPROM.put(idx+18,autoStartPwm);
 			EEPROM.put(idx+19,neutralZone);
+			EEPROM.put(idx+20,score);
 		}
 		void loadFromEEPROM(int idx) {
 			EEPROM.get(idx   ,kP);
@@ -84,6 +85,8 @@ class Configuration {
 			EEPROM.get(idx+16,autoStartDuration);
 			EEPROM.get(idx+18,autoStartPwm);
 			EEPROM.get(idx+19,neutralZone);
+			EEPROM.get(idx+20,score);
+			runIdx = 0;
 		}
 		uint16_t debugCreateScore() {
 			resetScore();

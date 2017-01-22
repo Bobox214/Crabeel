@@ -172,11 +172,11 @@ void bluetoothLoop() {
 					setState(IDLE);
 				}
 			} else if (v=='c') {
-				currentConf->saveToEEPROM(0);
-				currentConf->print();
+				currentGeneration->saveToEEPROM(0);
+				currentGeneration->print();
 			} else if (v=='v') {
-				currentConf->loadFromEEPROM(0);
-				currentConf->print();
+				currentGeneration->loadFromEEPROM(0);
+				currentGeneration->print();
 			} else if (v==' ') {
 				printState();
 				base.print();

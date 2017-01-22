@@ -79,6 +79,18 @@ class Generation {
 			for (uint8_t i=0;i<NBCONFS;i++)
 				configuration[i]->resetScore();
 		}
+		void saveToEEPROM(int idx) {
+			EEPROM.put(idx,level);
+			for (uint8_t i;i<NBCONFS;i++) {
+				configuration[i]->saveToEEPROM(idx+2+22*i);
+			}
+		}
+		void loadFromEEPROM(int idx) {
+			EEPROM.get(idx,level);
+			for (uint8_t i;i<NBCONFS;i++) {
+				configuration[i]->loadFromEEPROM(idx+2+22*i);
+			}
+		}
 		uint16_t level;
 		Configuration *configuration[NBCONFS];
 };
