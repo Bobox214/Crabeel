@@ -179,8 +179,8 @@ void bluetoothLoop() {
 				currentGeneration->print();
 			} else if (v==' ') {
 				printState();
-				base.print();
-				printOrigin();
+				Serial3.print(" ");
+				Serial3.print(currentConfIdx);
 				currentConf->print();
 				currentGeneration->print();
 			} else if (v=='t') {
@@ -256,8 +256,8 @@ void loop()
 					if (abs(pitch)<15) {
 						setState(BALANCE);
 					}
-					if (curTime-stateEnterTime > autoStart_timeOut ) {
-						if (autoStart_count<5) 
+					if (curTime-stateEnterTime > currentConf->autoStartDuration+autoStart_timeOut ) {
+						if (autoStart_count<3) 
 							setState(AUTO_START);
 						else
 							setState(BALANCE); // Force moving on
