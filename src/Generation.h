@@ -7,7 +7,7 @@
 #define NBCONFCHILDS  2
 #define NBCONFMUTATE  4
 #define NBITEMMUTATE  2
-#define SYNC  0xFACE
+#define SYNC  (uint32_t)(0xDEADBEEF)
 
 class Generation {
 	public:
@@ -79,16 +79,49 @@ class Generation {
 			for (uint8_t i=0;i<NBCONFS;i++)
 				configuration[i]->resetScore();
 		}
-		void saveToEEPROM(int idx) {
-			EEPROM.put(idx,level);
+		void saveToEEPROM(uint16_t addr,bool verbose=false) {
+			if ((addr%256) != 0 ) {
+				Serial3.print("[ERROR] Cannot save to address ");
+				Serial3.print(addr);
+				Serial3.println(", must a multiple of 256.");
+				return;
+			}
+			EEPROM.put(addr,SYNC);
+			EEPROM.put(addr+4,level);
 			for (uint8_t i;i<NBCONFS;i++) {
-				configuration[i]->saveToEEPROM(idx+2+22*i);
+				configuration[i]->saveToEEPROM(addr+6+22*i);
+			}
+			if (verbose) {
+				Serial3.print("[INFO] Generation saved to address ");
+				Serial3.print(addr);
+				Serial3.println();
+				print();
 			}
 		}
-		void loadFromEEPROM(int idx) {
-			EEPROM.get(idx,level);
+		void loadFromEEPROM(uint16_t addr,bool verbose=false) {
+			if ((addr%256) != 0 ) {
+				Serial3.print("[ERROR] Cannot load from address ");
+				Serial3.print(addr);
+				Serial3.println(", must a multiple of 256.");
+				return;
+			}
+			uint32_t sync;
+			EEPROM.get(addr,sync);
+			if (sync!=SYNC) {
+				Serial3.print("[ERROR] Cannot load from address ");
+				Serial3.print(addr);
+				Serial3.println(", no generation saved at this address before.");
+				return;
+			}
+			EEPROM.get(addr+4,level);
 			for (uint8_t i;i<NBCONFS;i++) {
-				configuration[i]->loadFromEEPROM(idx+2+22*i);
+				configuration[i]->loadFromEEPROM(addr+6+22*i);
+			}
+			if (verbose) {
+				Serial3.print("[INFO] Generation loaded from address ");
+				Serial3.print(addr);
+				Serial3.println();
+				print();
 			}
 		}
 		uint16_t level;

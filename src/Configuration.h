@@ -6,8 +6,9 @@
 #define MAXKD  10
 #define MINPITCH -2
 #define MAXPITCH  2
-#define MAXAUTOSTART 1000
-#define MINPWMSTART  100
+#define MINAUTOSTART 250
+#define MAXAUTOSTART 250
+#define MINPWMSTART  150
 #define MAXPWMSTART  255
 #define MAXNEUTRAL   255
 
@@ -26,7 +27,7 @@ class Configuration {
 			this->kI = constrain(kI,0,MAXKI);
 			this->kD = constrain(kD,0,MAXKD);
 			this->balancePitch      = constrain(balancePitch,MINPITCH,MAXPITCH);
-			this->autoStartDuration = constrain(autoStartDuration,0,MAXAUTOSTART);
+			this->autoStartDuration = constrain(autoStartDuration,MINAUTOSTART,MAXAUTOSTART);
 			this->autoStartPwm      = constrain(autoStartPwm,MINPWMSTART,MAXPWMSTART);
 			this->neutralZone       = constrain(neutralZone,0,MAXNEUTRAL);
 			resetScore();
@@ -63,7 +64,7 @@ class Configuration {
 			kD = random(0,100*MAXKD+1)/100.0;
 			balancePitch = random(10*MINPITCH,10*MAXPITCH)/10.0;
 			autoStartPwm = random(MINPWMSTART,MAXPWMSTART+1);
-			autoStartDuration = random(0,MAXAUTOSTART+1);
+			autoStartDuration = random(MINAUTOSTART,MAXAUTOSTART+1);
 			neutralZone = random(0,MAXNEUTRAL+1);
 			resetScore();
 		}
@@ -109,7 +110,7 @@ class Configuration {
 		}
 		void addScore(uint16_t score) {
 			if (runIdx>NBSCORES-1) {
-				Serial3.println("#### ERROR #### Cannot add score. Too much runs");
+				Serial3.println("[ERROR] Cannot add score. Too much runs");
 				return;
 			}
 			runScores[runIdx] = score;
@@ -117,7 +118,7 @@ class Configuration {
 		}
 		void compileScore() {
 			if (runIdx!=NBSCORES) {
-				Serial3.print("#### ERROR #### Cannot compile score. Not enough runs; runIdx=");
+				Serial3.print("[ERROR] Cannot compile score. Not enough runs; runIdx=");
 				Serial3.print(runIdx);
 				Serial3.println();
 				score = 0;

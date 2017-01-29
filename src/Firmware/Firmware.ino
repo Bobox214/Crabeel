@@ -11,6 +11,7 @@
 #define abs(x) ((x)>0?(x):-(x)) //math.h overwrite abs
 #define RAD_TO_DEGREE 57.2957795   // 180/3.141592
 #define DEGREE_TO_RAD 0.0174532925 // 3.141592/180
+#define TIP_PITCH 17
 
 #define BASE_WIDTH 0.173
 #define WHEEL_RADIUS 0.064
@@ -49,7 +50,7 @@ eState state;
 uint8_t nbScore;
 
 void setCurrentConf(uint8_t idx) {
-	currentConfIdx = 0;
+	currentConfIdx = idx;
 	currentConf = currentGeneration->configuration[currentConfIdx];
 }
 
@@ -144,6 +145,12 @@ void processCmd() {
 		} else if (cmd==2) {
 			currentConf->kD = value/10.0;
 			currentConf->print();
+		} else if (cmd==3) {
+			currentGeneration->saveToEEPROM(value,true);
+		} else if (cmd==4) {
+			currentGeneration->loadFromEEPROM(value,true);
+		} else if (cmd==5) {
+			setCurrentConf(value);
 		}
 		if (cmd>=0 or cmd<=2)
 			pid.setCoefficients(currentConf->kP,currentConf->kI,currentConf->kD);
@@ -159,6 +166,12 @@ void bluetoothLoop() {
 				cmd = 1;
 			else if (v=='d')
 				cmd = 2;
+			else if (v=='e')
+				cmd = 3;
+			else if (v=='l')
+				cmd = 4;
+			else if (v=='f')
+				cmd = 5;
 			else if (v=='a') {
 				if (state == IDLE) {
 					setState(AUTO_START);
@@ -227,7 +240,7 @@ void loop()
 	bluetoothLoop();
 	euler    = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
 	pitch = euler.z();
-	base.loop((euler.x()-180)*DEGREE_TO_RAD);
+	base.loop(euler.x()*DEGREE_TO_RAD);
 
 	lastTime = curTime;
 	curTime = millis();
@@ -241,7 +254,7 @@ void loop()
 				bno.getCalibration(&system, &gyro, &accel, &mag);
 				if (system>1) {
 					euler    = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
-					goalYaw = (euler.x()-180)*DEGREE_TO_RAD;
+					goalYaw = euler.x()*DEGREE_TO_RAD;
 					setState(IDLE);
 				}
 				break;
@@ -253,7 +266,7 @@ void loop()
 					base.setMotorPwm(motorPwm,motorPwm);
 				} else {
 					base.setMotorPwm(0,0);
-					if (abs(pitch)<15) {
+					if (abs(pitch)<TIP_PITCH) {
 						setState(BALANCE);
 					}
 					if (curTime-stateEnterTime > currentConf->autoStartDuration+autoStart_timeOut ) {
@@ -266,7 +279,7 @@ void loop()
 				break;
 			}
 			case BALANCE : {
-				if (abs(pitch)>15) {
+				if (abs(pitch)>TIP_PITCH) {
 					// Too much tilted
 					balanceTime = curTime-stateEnterTime;
 					if (nbScore==0) {
@@ -307,8 +320,13 @@ void loop()
 					//Serial3.print(goalYaw,6);
 					//Serial3.print(" --> errYaw:");
 					//Serial3.print(errYaw,6);
+					//Serial3.println();
 					if (errYaw*errYaw<0.0025) {
-						setState(IDLE);
+						if (nbScore==0 || nbScore>=NBSCORES) {
+							setState(IDLE);
+						} else {
+							setState(AUTO_START);
+						}
 					} else {
 						double w = constrain(w_kP*errYaw,-wMax,wMax);
 						// Convert v,w to motorPwm
@@ -363,10 +381,15 @@ void loop()
 						currentConf->addScore(balanceTime);
 						if (nbScore<NBSCORES) {
 							nbScore += 1;
-							setState(AUTO_START);
+							if (abs(base.x()-goalX)>1 or abs(base.y()-goalY) > 1)
+								setState(GO_ORIGIN);
+							else
+								setState(AUTO_START);
 						} else {
 							currentConf->compileScore();
 							currentConf->print();
+							if (currentConfIdx!=NBCONFS-1)
+								setCurrentConf(currentConfIdx+1);
 							setState(GO_ORIGIN);
 						}
 					}
@@ -374,6 +397,6 @@ void loop()
 				break;
 			}
 		}
-		delay(20);
+		delay(0);
 }
 

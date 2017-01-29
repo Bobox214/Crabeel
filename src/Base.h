@@ -61,7 +61,7 @@ class Base {
 			double df = (dr+dl)/2;
 			double dx = df*cos(yaw);
 			double dy = df*sin(yaw);
-			double dyaw = yaw-_yaw;
+			double dyaw = atan2(sin(yaw-_yaw),cos(yaw-_yaw));
 			curVR = dr/dt;
 			curVL = dl/dt;
 			curW  = dyaw/dt;
