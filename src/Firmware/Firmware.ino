@@ -11,7 +11,7 @@
 #define abs(x) ((x)>0?(x):-(x)) //math.h overwrite abs
 #define RAD_TO_DEGREE 57.2957795   // 180/3.141592
 #define DEGREE_TO_RAD 0.0174532925 // 3.141592/180
-#define TIP_PITCH 17
+#define TIP_PITCH 15
 
 #define BASE_WIDTH 0.173
 #define WHEEL_RADIUS 0.064
@@ -38,6 +38,8 @@ Configuration *currentConf;
 
 unsigned long autoStart_timeOut  = 1000;
 uint8_t       autoStart_count;
+uint16_t      autoStart_delay;
+double        autoStart_pitch;
 
 unsigned long curTime;
 unsigned long lastTime;
@@ -83,10 +85,12 @@ void setup() {
 }
 
 void setState(eState _state) {
-	if (_state==AUTO_START && state!=AUTO_START) {
+	if (_state==AUTO_START && state!=AUTO_START && state!=BALANCE) {
 		autoStart_count = 0;
+		autoStart_delay = currentConf->autoStartDuration;
 	} else {
-		autoStart_count += 1;
+		if (state!=BALANCE)
+			autoStart_count += 1;
 	}
 	state = _state;
 	if (state==IDLE) reset();
@@ -118,6 +122,9 @@ void printState() {
 	if (state==AUTO_START) {
 		Serial3.print(" ");
 		Serial3.print(autoStart_count);
+		Serial3.print(" ");
+		Serial3.print(autoStart_delay);
+		Serial3.print(" ms");
 	}
 	Serial3.println();
 }
@@ -199,8 +206,11 @@ void bluetoothLoop() {
 			} else if (v=='t') {
 				currentConf->balancePitch = pitch;
 				currentConf->print();
-			}
-			else if (v=='r') {
+			} else if (v=='r') {
+				goalX   = base.x();
+				goalY   = base.y();
+				goalYaw = base.yaw();
+			} else if (v=='n') {
 				currentGeneration->randomize();
 				currentGeneration->print();
 			} else if (v=='o') {
@@ -213,6 +223,7 @@ void bluetoothLoop() {
 			} else if (v=='g') {
 				currentGeneration->breed();
 				currentGeneration->print();
+				setCurrentConf(0);
 			}
 		} else {
 			if (v == ';') {
@@ -234,8 +245,7 @@ void reset() {
 }
 
 
-void loop()
-{
+void loop() {
 
 	bluetoothLoop();
 	euler    = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
@@ -260,32 +270,44 @@ void loop()
 				break;
 			}
 			case AUTO_START : {
-				if ( curTime-stateEnterTime < currentConf->autoStartDuration ) {
+				if ( curTime-stateEnterTime < autoStart_delay ) {
 					int motorPwm = currentConf->autoStartPwm*(((double)(curTime-stateEnterTime))/currentConf->autoStartDuration);
 					if (pitch>0) motorPwm = -motorPwm;
 					base.setMotorPwm(motorPwm,motorPwm);
 				} else {
 					base.setMotorPwm(0,0);
 					if (abs(pitch)<TIP_PITCH) {
+						autoStart_pitch = pitch;
 						setState(BALANCE);
 					}
 					if (curTime-stateEnterTime > currentConf->autoStartDuration+autoStart_timeOut ) {
-						if (autoStart_count<3) 
+						if (autoStart_count<3)  {
+							base.stop();
+							delay(500);
+							if (pitch*autoStart_pitch<0) autoStart_delay = autoStart_delay*0.90;
+							else                         autoStart_delay = autoStart_delay*1.10;
 							setState(AUTO_START);
-						else
+						} else
 							setState(BALANCE); // Force moving on
 					}
 				}
 				break;
 			}
 			case BALANCE : {
-				if (abs(pitch)>TIP_PITCH) {
-					// Too much tilted
+				if (abs(pitch)>TIP_PITCH || abs(base.x()-goalX)>0.8 || abs(base.y()-goalY)>0.8 ) {
+					// Too much tilted or too far
 					balanceTime = curTime-stateEnterTime;
 					if (nbScore==0) {
 						setState(IDLE);
 					} else {
-						setState(SCORE_CONF);
+						if (balanceTime<250 && autoStart_count<3) {
+							base.stop();
+							delay(500);
+							if (pitch*autoStart_pitch<0) autoStart_delay = autoStart_delay*0.90;
+							else                         autoStart_delay = autoStart_delay*1.10;
+							setState(AUTO_START);
+						} else
+							setState(SCORE_CONF);
 					}
 				} else {
 					double dt = (curTime-lastTime)/1000.0;
@@ -322,7 +344,7 @@ void loop()
 					//Serial3.print(errYaw,6);
 					//Serial3.println();
 					if (errYaw*errYaw<0.0025) {
-						if (nbScore==0 || nbScore>=NBSCORES) {
+						if (nbScore==0 || nbScore>NBSCORES) {
 							setState(IDLE);
 						} else {
 							setState(AUTO_START);
@@ -372,7 +394,7 @@ void loop()
 			case SCORE_CONF : {
 				// Delay scoring to let times between auto starts
 				base.stop();
-				if (curTime-stateEnterTime>=500) {
+				if (curTime-stateEnterTime>=700) {
 					if (nbScore==0) {
 						currentConf->resetScore();
 						nbScore = 1;
@@ -381,7 +403,7 @@ void loop()
 						currentConf->addScore(balanceTime);
 						if (nbScore<NBSCORES) {
 							nbScore += 1;
-							if (abs(base.x()-goalX)>1 or abs(base.y()-goalY) > 1)
+							if (abs(base.x()-goalX)>0.2 or abs(base.y()-goalY) > 0.2)
 								setState(GO_ORIGIN);
 							else
 								setState(AUTO_START);
@@ -390,6 +412,7 @@ void loop()
 							currentConf->print();
 							if (currentConfIdx!=NBCONFS-1)
 								setCurrentConf(currentConfIdx+1);
+							nbScore += 1;
 							setState(GO_ORIGIN);
 						}
 					}
@@ -397,6 +420,6 @@ void loop()
 				break;
 			}
 		}
-		delay(0);
+		delay(10);
 }
 

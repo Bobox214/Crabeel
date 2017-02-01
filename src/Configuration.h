@@ -6,9 +6,9 @@
 #define MAXKD  10
 #define MINPITCH -2
 #define MAXPITCH  2
-#define MINAUTOSTART 250
-#define MAXAUTOSTART 250
-#define MINPWMSTART  150
+#define MINAUTOSTART 150
+#define MAXAUTOSTART 500
+#define MINPWMSTART  170
 #define MAXPWMSTART  255
 #define MAXNEUTRAL   255
 
@@ -23,9 +23,9 @@ class Configuration {
 		,	uint16_t autoStartDuration,uint8_t autoStartPwm
 		,	uint8_t neutralZone
 		) {
-			this->kP = constrain(kP,0,MAXKP);
-			this->kI = constrain(kI,0,MAXKI);
-			this->kD = constrain(kD,0,MAXKD);
+			this->kP                = constrain(kP,0,MAXKP);
+			this->kI                = constrain(kI,0,MAXKI);
+			this->kD                = constrain(kD,0,MAXKD);
 			this->balancePitch      = constrain(balancePitch,MINPITCH,MAXPITCH);
 			this->autoStartDuration = constrain(autoStartDuration,MINAUTOSTART,MAXAUTOSTART);
 			this->autoStartPwm      = constrain(autoStartPwm,MINPWMSTART,MAXPWMSTART);
