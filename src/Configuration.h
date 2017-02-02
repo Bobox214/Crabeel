@@ -1,15 +1,19 @@
 #include <EEPROM.h>
 
 #define NBSCORES 10
+#define MINKP 0
 #define MAXKP 100
+#define MINKI 0
 #define MAXKI 100
-#define MAXKD  10
+#define MINKD 0
+#define MAXKD 10
 #define MINPITCH -2
 #define MAXPITCH  2
 #define MINAUTOSTART 150
 #define MAXAUTOSTART 500
 #define MINPWMSTART  170
 #define MAXPWMSTART  255
+#define MINNEUTRAL   0
 #define MAXNEUTRAL   255
 
 class Configuration {
@@ -23,20 +27,20 @@ class Configuration {
 		,	uint16_t autoStartDuration,uint8_t autoStartPwm
 		,	uint8_t neutralZone
 		) {
-			this->kP                = constrain(kP,0,MAXKP);
-			this->kI                = constrain(kI,0,MAXKI);
-			this->kD                = constrain(kD,0,MAXKD);
+			this->kP                = constrain(kP,MINKP,MAXKP);
+			this->kI                = constrain(kI,MINKI,MAXKI);
+			this->kD                = constrain(kD,MINKD,MAXKD);
 			this->balancePitch      = constrain(balancePitch,MINPITCH,MAXPITCH);
 			this->autoStartDuration = constrain(autoStartDuration,MINAUTOSTART,MAXAUTOSTART);
 			this->autoStartPwm      = constrain(autoStartPwm,MINPWMSTART,MAXPWMSTART);
-			this->neutralZone       = constrain(neutralZone,0,MAXNEUTRAL);
+			this->neutralZone       = constrain(neutralZone,MINNEUTRAL,MAXNEUTRAL);
 			resetScore();
 		}
-		double   kP,kI,kD;
-		double   balancePitch;
-		uint16_t autoStartDuration;
-		uint8_t  autoStartPwm;
-		uint8_t  neutralZone;
+		double  kP,kI,kD;
+		double  balancePitch;
+		int16_t autoStartDuration;
+		int16_t autoStartPwm;
+		int16_t neutralZone;
 		void print() {
 			Serial3.print("# Configuration - PID:(");
 			Serial3.print(kP,2);
@@ -58,6 +62,42 @@ class Configuration {
 			}
 			Serial3.println();
 		}
+		void mutate_kP(uint16_t percent) {
+			double var = ((MAXKP-MINKP)*random(percent*10))/1000.0;
+			kP += random(2)==0?-var:var;
+			kP = constrain( kP , MINKP , MAXKP);
+		}
+		void mutate_kI(uint16_t percent) {
+			double var = ((MAXKI-MINKI)*random(percent*10))/1000.0;
+			kI += random(2)==0?-var:var;
+			kI = constrain( kI , MINKI , MAXKI);
+		}
+		void mutate_kD(uint16_t percent) {
+			double var = ((MAXKD-MINKD)*random(percent*10))/1000.0;
+			kD += random(2)==0?-var:var;
+			kD = constrain( kD , MINKD , MAXKD);
+		}
+		void mutate_balancePitch(uint16_t percent) {
+			double var = ((MAXPITCH-MINPITCH)*random(percent*10))/1000.0;
+			balancePitch += random(2)==0?-var:var;
+			balancePitch = constrain( balancePitch , MINPITCH , MAXPITCH );
+		}
+		void mutate_autoStartDuration(uint16_t percent) {
+			uint16_t var = ((MAXAUTOSTART-MINAUTOSTART)*random(percent*10))/1000.0;
+			autoStartDuration += random(2)==0?-var:-var;
+			autoStartDuration = constrain( autoStartDuration , MINAUTOSTART , MAXAUTOSTART );
+		}
+		void mutate_autoStartPwm(uint16_t percent) {
+			uint8_t var = ((MAXPWMSTART-MINPWMSTART)*random(percent*10))/1000.0;
+			autoStartPwm += random(2)==0?-var:var;
+			autoStartPwm = constrain( autoStartPwm , MINPWMSTART , MAXPWMSTART );
+		}
+		void mutate_neutralZone(uint16_t percent) {
+			uint8_t var = ((MAXNEUTRAL-MINNEUTRAL)*random(percent*10))/1000.0;
+			neutralZone += random(2)==0?-var:var;
+			neutralZone = constrain( neutralZone , MINNEUTRAL , MAXNEUTRAL );
+		}
+
 		void randomize() {
 			kP = random(0,10*MAXKP+1)/10.0;
 			kI = random(0,10*MAXKI+1)/10.0;
@@ -75,8 +115,8 @@ class Configuration {
 			EEPROM.put(idx+12,balancePitch);
 			EEPROM.put(idx+16,autoStartDuration);
 			EEPROM.put(idx+18,autoStartPwm);
-			EEPROM.put(idx+19,neutralZone);
-			EEPROM.put(idx+20,score);
+			EEPROM.put(idx+20,neutralZone);
+			EEPROM.put(idx+22,score);
 		}
 		void loadFromEEPROM(int idx) {
 			EEPROM.get(idx   ,kP);
@@ -85,8 +125,8 @@ class Configuration {
 			EEPROM.get(idx+12,balancePitch);
 			EEPROM.get(idx+16,autoStartDuration);
 			EEPROM.get(idx+18,autoStartPwm);
-			EEPROM.get(idx+19,neutralZone);
-			EEPROM.get(idx+20,score);
+			EEPROM.get(idx+20,neutralZone);
+			EEPROM.get(idx+22,score);
 			runIdx = 0;
 		}
 		uint16_t debugCreateScore() {
@@ -141,28 +181,31 @@ class Configuration {
 			score = sum/6;
 		}
 		void setChildOf(Configuration* father, Configuration* mother) {
-			setCoefficients(
-				random(70,130)/100.0*(random(2)==0 ? father->kP                : mother->kP                )
-			,	random(70,130)/100.0*(random(2)==0 ? father->kI                : mother->kI                )
-			,	random(70,130)/100.0*(random(2)==0 ? father->kD                : mother->kD                )
-			,	random(70,130)/100.0*(random(2)==0 ? father->balancePitch      : mother->balancePitch      )
-			,	random(70,130)/100.0*(random(2)==0 ? father->autoStartDuration : mother->autoStartDuration )
-			,	random(70,130)/100.0*(random(2)==0 ? father->autoStartPwm      : mother->autoStartPwm      )
-			,	random(70,130)/100.0*(random(2)==0 ? father->neutralZone       : mother->neutralZone       )
-			);
+			kP                = random(2)==0 ? father->kP                : mother->kP                ;
+			kI                = random(2)==0 ? father->kI                : mother->kI                ;
+			kD                = random(2)==0 ? father->kD                : mother->kD                ;
+			balancePitch      = random(2)==0 ? father->balancePitch      : mother->balancePitch      ;
+			autoStartDuration = random(2)==0 ? father->autoStartDuration : mother->autoStartDuration ;
+			autoStartPwm      = random(2)==0 ? father->autoStartPwm      : mother->autoStartPwm      ;
+			neutralZone       = random(2)==0 ? father->neutralZone       : mother->neutralZone       ;
+			mutate_kP(5);
+			mutate_kI(5);
+			mutate_kD(5);
+			mutate_balancePitch(5);
+			mutate_autoStartDuration(5);
+			mutate_autoStartPwm(5);
+			mutate_neutralZone(5);
 		}
 		void mutate(uint8_t nbMutation) {
 			for (uint8_t j=0;j<nbMutation;j++) {
 				uint8_t i = random(0,7);
-				setCoefficients(
-					i==0 ? (random(50,150)/100.0)*kP                : kP
-				,	i==1 ? (random(50,150)/100.0)*kI                : kI
-				,	i==2 ? (random(50,150)/100.0)*kD                : kD
-				,	i==3 ? (random(50,150)/100.0)*balancePitch      : balancePitch
-				,	i==4 ? (random(50,150)/100.0)*autoStartDuration : autoStartDuration
-				,	i==5 ? (random(50,150)/100.0)*autoStartPwm      : autoStartPwm
-				,	i==6 ? (random(50,150)/100.0)*neutralZone       : neutralZone
-				);
+				if	(i==0) mutate_kP(15);
+				if	(i==1) mutate_kI(15);
+				if	(i==2) mutate_kD(15);
+				if	(i==3) mutate_balancePitch(15);
+				if	(i==4) mutate_autoStartDuration(15);
+				if	(i==5) mutate_autoStartPwm(15);
+				if	(i==6) mutate_neutralZone(15);
 			}
 		}
 	public:

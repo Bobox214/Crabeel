@@ -89,7 +89,7 @@ class Generation {
 			EEPROM.put(addr,SYNC);
 			EEPROM.put(addr+4,level);
 			for (uint8_t i;i<NBCONFS;i++) {
-				configuration[i]->saveToEEPROM(addr+6+22*i);
+				configuration[i]->saveToEEPROM(addr+6+24*i);
 			}
 			if (verbose) {
 				Serial3.print("[INFO] Generation saved to address ");
@@ -115,7 +115,7 @@ class Generation {
 			}
 			EEPROM.get(addr+4,level);
 			for (uint8_t i;i<NBCONFS;i++) {
-				configuration[i]->loadFromEEPROM(addr+6+22*i);
+				configuration[i]->loadFromEEPROM(addr+6+24*i);
 			}
 			if (verbose) {
 				Serial3.print("[INFO] Generation loaded from address ");
