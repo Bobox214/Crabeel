@@ -1,0 +1,12 @@
+# Generation : 8
+    0# Configuration - PID:(9.99,98.84,2.85)  - pitch:-0.50 - autoStart:170 for 309ms - neutral:5 -> score:950
+    1# Configuration - PID:(8.85,82.15,4.16)  - pitch:1.50  - autoStart:170 for 255ms - neutral:6 -> score:654
+    2# Configuration - PID:(10.10,69.86,3.76) - pitch:0.96  - autoStart:215 for 250ms - neutral:7 -> score:1992
+    3# Configuration - PID:(10.78,72.45,3.54) - pitch:1.10  - autoStart:181 for 272ms - neutral:7 -> score:2252
+    4# Configuration - PID:(13.62,82.15,5.35) - pitch:1.31  - autoStart:170 for 339ms - neutral:9 -> score:753
+    5# Configuration - PID:(9.84,49.51,3.72)  - pitch:1.29  - autoStart:197 for 212ms - neutral:7 -> score:1635
+    6# Configuration - PID:(9.99,68.21,4.60)  - pitch:1.34  - autoStart:204 for 276ms - neutral:7 -> score:1205
+    7# Configuration - PID:(12.95,55.01,4.00) - pitch:0.75  - autoStart:184 for 261ms - neutral:8 -> score:1738
+    8# Configuration - PID:(14.55,50.93,4.70) - pitch:0.93  - autoStart:150 for 278ms - neutral:8 -> score:2098
+    9# Configuration - PID:(11.35,64.69,4.42) - pitch:1.18  - autoStart:170 for 266ms - neutral:7 -> score:1826
+

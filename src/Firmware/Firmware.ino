@@ -284,8 +284,7 @@ void loop() {
 						if (autoStart_count<3)  {
 							base.stop();
 							delay(500);
-							if (pitch*autoStart_pitch<0) autoStart_delay = autoStart_delay*0.90;
-							else                         autoStart_delay = autoStart_delay*1.10;
+							autoStart_delay = autoStart_delay*1.10;
 							setState(AUTO_START);
 						} else
 							setState(BALANCE); // Force moving on
