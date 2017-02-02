@@ -44,7 +44,7 @@ double        autoStart_pitch;
 unsigned long curTime;
 unsigned long lastTime;
 unsigned long stateEnterTime; // Time in millis when current state was entered
-unsigned long balanceTime; // Time in millis when current state was entered
+unsigned long balanceTime;
 
 enum eState                {  IDLE  ,  CALIBRATION  ,  AUTO_START  ,  BALANCE  ,  SCORE_CONF  ,  GO_ORIGIN  };
 const char * eStateStr[] = { "IDLE" , "CALIBRATION" , "AUTO_START" , "BALANCE" , "SCORE_CONF" , "GO_ORIGIN" };
@@ -167,13 +167,7 @@ void bluetoothLoop() {
 	if (Serial3.available()) {
 		int v = Serial3.read();
 		if (cmd==-1) {
-			if (v=='p')
-				cmd = 0;
-			else if (v=='i')
-				cmd = 1;
-			else if (v=='d')
-				cmd = 2;
-			else if (v=='e')
+			if (v=='e')
 				cmd = 3;
 			else if (v=='l')
 				cmd = 4;
@@ -191,21 +185,12 @@ void bluetoothLoop() {
 				} else {
 					setState(IDLE);
 				}
-			} else if (v=='c') {
-				currentGeneration->saveToEEPROM(0);
-				currentGeneration->print();
-			} else if (v=='v') {
-				currentGeneration->loadFromEEPROM(0);
-				currentGeneration->print();
 			} else if (v==' ') {
 				printState();
 				Serial3.print(" ");
 				Serial3.print(currentConfIdx);
 				currentConf->print();
 				currentGeneration->print();
-			} else if (v=='t') {
-				currentConf->balancePitch = pitch;
-				currentConf->print();
 			} else if (v=='r') {
 				goalX   = base.x();
 				goalY   = base.y();
@@ -320,28 +305,9 @@ void loop() {
 			case GO_ORIGIN : {
 				double errX = goalX-base.x();
 				double errY = goalY-base.y();
-				//Serial3.print("GO_ORIGIN from x:");
-				//Serial3.print(base.x());
-				//Serial3.print(" y:");
-				//Serial3.print(base.y());
-				//Serial3.print(" to x:");
-				//Serial3.print(goalX);
-				//Serial3.print(" y:");
-				//Serial3.print(goalY);
-				//Serial3.print("  -->   errX:");
-				//Serial3.print(errX,6);
-				//Serial3.print(" errY:");
-				//Serial3.print(errY,6);
 				if (errX*errX<0.0025 && errY*errY<0.0025) {
 					double errYaw = goalYaw-base.yaw();
 					errYaw = atan2(sin(errYaw),cos(errYaw));
-					//Serial3.print("from yaw:");
-					//Serial3.print(base.yaw(),6);
-					//Serial3.print(" to yaw:");
-					//Serial3.print(goalYaw,6);
-					//Serial3.print(" --> errYaw:");
-					//Serial3.print(errYaw,6);
-					//Serial3.println();
 					if (errYaw*errYaw<0.0025) {
 						if (nbScore==0 || nbScore>NBSCORES) {
 							setState(IDLE);
@@ -351,9 +317,6 @@ void loop() {
 					} else {
 						double w = constrain(w_kP*errYaw,-wMax,wMax);
 						// Convert v,w to motorPwm
-						//Serial3.print(" --> w:");
-						//Serial3.print(w,6);
-						//Serial3.println();
 						base.setSpeed(0,w);
 					}
 				} else {
@@ -368,12 +331,6 @@ void loop() {
 					} else {
 						vM = 1;
 					}
-					//Serial3.print(" yaw:");
-					//Serial3.print(base.yaw());
-					//Serial3.print(" goalYaw:");
-					//Serial3.print(lclGoalYaw);
-					//Serial3.print(" --> errYaw:");
-					//Serial3.print(errYaw);
 					w = constrain(w_kP*errYaw,-wMax,wMax);
 					if (abs(errYaw)<0.25) {
 						v = vM*vMax/pow(abs(w)+1,0.5);
@@ -382,11 +339,6 @@ void loop() {
 					}
 					// Convert v,w to motorPwm
 					base.setSpeed(v,w);
-					//Serial3.print(" --> w:");
-					//Serial3.print(w);
-					//Serial3.print(" v:");
-					//Serial3.print(v);
-					//Serial3.println();
 				}
 				break;
 			}
