@@ -10,11 +10,11 @@
 #define MINPITCH -2
 #define MAXPITCH  2
 #define MINAUTOSTART 150
-#define MAXAUTOSTART 500
+#define MAXAUTOSTART 400
 #define MINPWMSTART  170
 #define MAXPWMSTART  255
 #define MINNEUTRAL   0
-#define MAXNEUTRAL   255
+#define MAXNEUTRAL   150
 
 class Configuration {
 	public:
@@ -64,38 +64,38 @@ class Configuration {
 		}
 		void mutate_kP(uint16_t percent) {
 			double var = ((MAXKP-MINKP)*random(percent*10))/1000.0;
-			kP += random(2)==0?-var:var;
-			kP = constrain( kP , MINKP , MAXKP);
+			if (random(2)==0) var = -var;
+			kP = constrain( kP+var , MINKP , MAXKP);
 		}
 		void mutate_kI(uint16_t percent) {
 			double var = ((MAXKI-MINKI)*random(percent*10))/1000.0;
-			kI += random(2)==0?-var:var;
-			kI = constrain( kI , MINKI , MAXKI);
+			if (random(2)==0) var = -var;
+			kI = constrain( kI+var , MINKI , MAXKI);
 		}
 		void mutate_kD(uint16_t percent) {
 			double var = ((MAXKD-MINKD)*random(percent*10))/1000.0;
-			kD += random(2)==0?-var:var;
-			kD = constrain( kD , MINKD , MAXKD);
+			if (random(2)==0) var = -var;
+			kD = constrain( kD+var , MINKD , MAXKD);
 		}
 		void mutate_balancePitch(uint16_t percent) {
 			double var = ((MAXPITCH-MINPITCH)*random(percent*10))/1000.0;
-			balancePitch += random(2)==0?-var:var;
-			balancePitch = constrain( balancePitch , MINPITCH , MAXPITCH );
+			if (random(2)==0) var = -var;
+			balancePitch = constrain( balancePitch+var , MINPITCH , MAXPITCH );
 		}
 		void mutate_autoStartDuration(uint16_t percent) {
-			uint16_t var = ((MAXAUTOSTART-MINAUTOSTART)*random(percent*10))/1000.0;
-			autoStartDuration += random(2)==0?-var:-var;
-			autoStartDuration = constrain( autoStartDuration , MINAUTOSTART , MAXAUTOSTART );
+			double var = ((MAXAUTOSTART-MINAUTOSTART)*random(percent*10))/1000.0;
+			if (random(2)==0) var = -var;
+			autoStartDuration = constrain( autoStartDuration+var , MINAUTOSTART , MAXAUTOSTART );
 		}
 		void mutate_autoStartPwm(uint16_t percent) {
-			uint8_t var = ((MAXPWMSTART-MINPWMSTART)*random(percent*10))/1000.0;
-			autoStartPwm += random(2)==0?-var:var;
-			autoStartPwm = constrain( autoStartPwm , MINPWMSTART , MAXPWMSTART );
+			double var = ((MAXPWMSTART-MINPWMSTART)*random(percent*10))/1000.0;
+			if (random(2)==0) var = -var;
+			autoStartPwm = constrain( autoStartPwm+var , MINPWMSTART , MAXPWMSTART );
 		}
 		void mutate_neutralZone(uint16_t percent) {
-			uint8_t var = ((MAXNEUTRAL-MINNEUTRAL)*random(percent*10))/1000.0;
-			neutralZone += random(2)==0?-var:var;
-			neutralZone = constrain( neutralZone , MINNEUTRAL , MAXNEUTRAL );
+			double var = ((MAXNEUTRAL-MINNEUTRAL)*random(percent*10))/1000.0;
+			if (random(2)==0) var = -var;
+			neutralZone = constrain( neutralZone+var , MINNEUTRAL , MAXNEUTRAL );
 		}
 
 		void randomize() {
@@ -175,10 +175,10 @@ class Configuration {
 				}
 			}
 			uint32_t sum=0;
-			// score is the mean of runScores[2:8];	
-			for (uint8_t i=2;i<NBSCORES-2;i++)
+			// score is the mean of runScores[3:9];	
+			for (uint8_t i=3;i<NBSCORES-1;i++)
 				sum += runScores[i];
-			score = sum/6;
+			score = sum/(NBSCORES-4);
 		}
 		void setChildOf(Configuration* father, Configuration* mother) {
 			kP                = random(2)==0 ? father->kP                : mother->kP                ;

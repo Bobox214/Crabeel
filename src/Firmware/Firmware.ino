@@ -256,7 +256,7 @@ void loop() {
 			}
 			case AUTO_START : {
 				if ( curTime-stateEnterTime < autoStart_delay ) {
-					int motorPwm = currentConf->autoStartPwm*(((double)(curTime-stateEnterTime))/currentConf->autoStartDuration);
+					int motorPwm = currentConf->autoStartPwm*(((double)(curTime-stateEnterTime))/autoStart_delay);
 					if (pitch>0) motorPwm = -motorPwm;
 					base.setMotorPwm(motorPwm,motorPwm);
 				} else {
